@@ -1,0 +1,89 @@
+<Window x:Class="ClonarDC.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Clonar DC" Width="1380" Height="860" MinWidth="1100" MinHeight="700" WindowStartupLocation="CenterScreen">
+    <Grid>
+        <Grid.ColumnDefinitions><ColumnDefinition Width="235"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+        <Border Grid.Column="0" Background="#0B0C14" BorderBrush="#242637" BorderThickness="0,0,1,0">
+            <Grid Margin="16">
+                <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                <StackPanel Orientation="Horizontal" Margin="4,6,4,26">
+                    <Border Width="42" Height="42" CornerRadius="12" Background="#6D28D9"><Grid><TextBlock Text="DC" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center"/></Grid></Border>
+                    <StackPanel Margin="11,2,0,0"><TextBlock Text="Clonar DC" FontSize="17" FontWeight="Bold"/><TextBlock Text="Desktop" FontSize="11" Foreground="{StaticResource MutedBrush}"/></StackPanel>
+                </StackPanel>
+                <StackPanel Grid.Row="1">
+                    <Button Style="{StaticResource NavButton}" Content="⌂  Visão geral" Tag="0" Click="Nav_Click"/>
+                    <Button Style="{StaticResource NavButton}" Content="⧉  Clonagem" Tag="1" Click="Nav_Click"/>
+                    <Button Style="{StaticResource NavButton}" Content="▣  Backups" Tag="2" Click="Nav_Click"/>
+                    <Button Style="{StaticResource NavButton}" Content="≡  Operações" Tag="3" Click="Nav_Click"/>
+                    <Button Style="{StaticResource NavButton}" Content="◇  Licença" Tag="4" Click="Nav_Click"/>
+                    <Button Style="{StaticResource NavButton}" Content="⚙  Configurações" Tag="5" Click="Nav_Click"/>
+                    <Button x:Name="AdminNav" Style="{StaticResource NavButton}" Content="◆  Administração" Tag="6" Click="Nav_Click"/>
+                </StackPanel>
+                <Border Grid.Row="2" Background="#12141D" CornerRadius="10" Padding="12">
+                    <StackPanel><TextBlock x:Name="UserNameText" FontWeight="SemiBold"/><TextBlock x:Name="UserEmailText" Foreground="{StaticResource MutedBrush}" FontSize="11" TextTrimming="CharacterEllipsis"/><TextBlock x:Name="VersionText" Foreground="#7C7890" FontSize="10" Margin="0,6,0,0"/></StackPanel>
+                </Border>
+            </Grid>
+        </Border>
+
+        <TabControl x:Name="Pages" Grid.Column="1" Background="{StaticResource BgBrush}" BorderThickness="0" SelectionChanged="Pages_SelectionChanged">
+            <TabControl.Resources>
+                <Style TargetType="TabItem"><Setter Property="Visibility" Value="Collapsed"/></Style>
+            </TabControl.Resources>
+
+            <TabItem Header="Dashboard"><ScrollViewer VerticalScrollBarVisibility="Auto"><StackPanel Margin="34">
+                <TextBlock Text="Visão geral" FontSize="30" FontWeight="Bold"/><TextBlock Text="Controle rápido do seu ambiente Clonar DC." Foreground="{StaticResource MutedBrush}" Margin="0,6,0,26"/>
+                <UniformGrid Columns="3" Margin="0,0,0,24">
+                    <Border Background="{StaticResource PanelBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="12" Padding="20" Margin="0,0,12,0"><StackPanel><TextBlock Text="Licença" Foreground="{StaticResource MutedBrush}"/><TextBlock x:Name="DashboardLicense" FontSize="21" FontWeight="Bold" Margin="0,8,0,0"/></StackPanel></Border>
+                    <Border Background="{StaticResource PanelBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="12" Padding="20" Margin="0,0,12,0"><StackPanel><TextBlock Text="Backups locais" Foreground="{StaticResource MutedBrush}"/><TextBlock x:Name="DashboardBackups" FontSize="21" FontWeight="Bold" Margin="0,8,0,0"/></StackPanel></Border>
+                    <Border Background="{StaticResource PanelBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="12" Padding="20"><StackPanel><TextBlock Text="Última operação" Foreground="{StaticResource MutedBrush}"/><TextBlock x:Name="DashboardLastOperation" Text="Nenhuma nesta sessão" FontSize="16" FontWeight="SemiBold" Margin="0,8,0,0" TextWrapping="Wrap"/></StackPanel></Border>
+                </UniformGrid>
+                <Border Background="#151225" BorderBrush="#44336F" BorderThickness="1" CornerRadius="14" Padding="24">
+                    <StackPanel><TextBlock Text="Fluxo seguro" FontSize="20" FontWeight="Bold"/><TextBlock Text="1. Informe o Token do bot oficial  →  2. Teste  →  3. Selecione origem e destino  →  4. Analise as diferenças  →  5. Faça backup  →  6. Clone." Foreground="#C4B5FD" Margin="0,10,0,0" TextWrapping="Wrap"/></StackPanel>
+                </Border>
+            </StackPanel></ScrollViewer></TabItem>
+
+            <TabItem Header="Clonagem"><Grid Margin="34"><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+                <StackPanel><TextBlock Text="Clonagem" FontSize="30" FontWeight="Bold"/><TextBlock Text="Analise antes de alterar. O Token permanece neste computador." Foreground="{StaticResource MutedBrush}" Margin="0,6,0,22"/></StackPanel>
+                <Border Grid.Row="1" Background="{StaticResource PanelBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="14" Padding="22">
+                    <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0" Margin="0,0,14,0">
+                            <TextBlock Text="Token"/><Grid Margin="0,6,0,14"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><PasswordBox x:Name="TokenBox" Height="42"/><Button Grid.Column="1" Content="Testar Token" Margin="9,0,0,0" Click="TestToken_Click"/></Grid>
+                            <TextBlock Text="Servidor Original"/><ComboBox x:Name="SourceGuildBox" Height="42" Margin="0,6,0,14"/>
+                            <TextBlock Text="Servidor de Destino"/><ComboBox x:Name="TargetGuildBox" Height="42" Margin="0,6,0,0"/>
+                        </StackPanel>
+                        <StackPanel Grid.Column="1" Margin="14,0,0,0">
+                            <TextBlock Text="Modo"/><ComboBox x:Name="ModeBox" Height="42" Margin="0,6,0,14" SelectedIndex="0"><ComboBoxItem Content="Seguro — apenas adiciona o que falta" Tag="safe"/><ComboBoxItem Content="Mesclar — preserva correspondências" Tag="merge"/><ComboBoxItem Content="Exato seguro — recria o destino" Tag="exact"/></ComboBox>
+                            <TextBlock Text="Proteções"/><CheckBox x:Name="AutoBackupCheck" Content="Criar backup automático do destino" IsChecked="True" Margin="0,8,0,5"/><CheckBox x:Name="RememberTokenCheck" Content="Lembrar Token com proteção do Windows" Margin="0,2,0,18"/>
+                            <StackPanel Orientation="Horizontal"><Button Content="Analisar" Click="Analyze_Click"/><Button x:Name="CloneButton" Style="{StaticResource PrimaryButton}" Content="Clonar" Click="Clone_Click" IsEnabled="False"/></StackPanel>
+                        </StackPanel>
+                    </Grid>
+                </Border>
+                <Grid Grid.Row="2" Margin="0,18,0,0"><Grid.ColumnDefinitions><ColumnDefinition Width="0.9*"/><ColumnDefinition Width="1.1*"/></Grid.ColumnDefinitions>
+                    <Border Background="{StaticResource PanelBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="12" Padding="18" Margin="0,0,9,0"><StackPanel><TextBlock Text="Plano da operação" FontSize="17" FontWeight="Bold"/><TextBlock x:Name="PlanText" Text="Teste o Token e faça uma análise para gerar o plano." Foreground="{StaticResource MutedBrush}" TextWrapping="Wrap" Margin="0,10,0,0"/></StackPanel></Border>
+                    <Border Grid.Column="1" Background="{StaticResource PanelBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="12" Padding="18" Margin="9,0,0,0"><Grid><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions><TextBlock Text="Log ao vivo" FontSize="17" FontWeight="Bold"/><ListBox x:Name="LogList" Grid.Row="1" Margin="0,10,0,0"/></Grid></Border>
+                </Grid>
+            </Grid></TabItem>
+
+            <TabItem Header="Backups"><Grid Margin="34"><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+                <DockPanel><StackPanel DockPanel.Dock="Left"><TextBlock Text="Backups" FontSize="30" FontWeight="Bold"/><TextBlock Text="Snapshots locais versionados com verificação de integridade." Foreground="{StaticResource MutedBrush}" Margin="0,6,0,22"/></StackPanel><StackPanel DockPanel.Dock="Right" Orientation="Horizontal" HorizontalAlignment="Right"><Button Content="Atualizar" Click="RefreshBackups_Click"/><Button Style="{StaticResource PrimaryButton}" Content="Abrir pasta" Click="OpenBackupFolder_Click"/></StackPanel></DockPanel>
+                <Grid Grid.Row="1"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="310"/></Grid.ColumnDefinitions><ListBox x:Name="BackupList" DisplayMemberPath="" SelectionChanged="BackupList_SelectionChanged"/>
+                    <Border Grid.Column="1" Background="{StaticResource PanelBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="12" Padding="18" Margin="16,0,0,0"><StackPanel><TextBlock Text="Backup selecionado" FontSize="17" FontWeight="Bold"/><TextBlock x:Name="BackupDetails" Foreground="{StaticResource MutedBrush}" TextWrapping="Wrap" Margin="0,10,0,18"/><Button Content="Verificar integridade" Click="VerifyBackup_Click"/><Button Content="Restaurar no servidor selecionado" Click="RestoreBackup_Click" Margin="0,9,0,0"/></StackPanel></Border>
+                </Grid>
+            </Grid></TabItem>
+
+            <TabItem Header="Operações"><Grid Margin="34"><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions><StackPanel><TextBlock Text="Operações" FontSize="30" FontWeight="Bold"/><TextBlock Text="Histórico desta sessão e diagnóstico sem credenciais." Foreground="{StaticResource MutedBrush}" Margin="0,6,0,22"/></StackPanel><ListBox x:Name="OperationsList" Grid.Row="1"/></Grid></TabItem>
+
+            <TabItem Header="Licença"><StackPanel Margin="34"><TextBlock Text="Licença" FontSize="30" FontWeight="Bold"/><TextBlock x:Name="LicenseDetails" Foreground="{StaticResource MutedBrush}" Margin="0,12,0,0" FontSize="15" TextWrapping="Wrap"/></StackPanel></TabItem>
+
+            <TabItem Header="Configurações"><StackPanel Margin="34"><TextBlock Text="Configurações" FontSize="30" FontWeight="Bold"/><TextBlock Text="Segurança" FontSize="18" FontWeight="Bold" Margin="0,24,0,10"/><Button Width="220" HorizontalAlignment="Left" Content="Apagar Token salvo" Click="ClearToken_Click"/><TextBlock Text="Armazenamento" FontSize="18" FontWeight="Bold" Margin="0,24,0,10"/><TextBlock x:Name="BackupPathText" Foreground="{StaticResource MutedBrush}" TextWrapping="Wrap"/></StackPanel></TabItem>
+
+            <TabItem Header="Admin"><Grid Margin="34"><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+                <DockPanel><StackPanel DockPanel.Dock="Left"><TextBlock Text="Administração" FontSize="30" FontWeight="Bold"/><TextBlock Text="Usuários, aprovações e licenças." Foreground="{StaticResource MutedBrush}" Margin="0,6,0,22"/></StackPanel><Button DockPanel.Dock="Right" Content="Atualizar usuários" Click="LoadAdmin_Click" HorizontalAlignment="Right"/></DockPanel>
+                <Grid Grid.Row="1"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="310"/></Grid.ColumnDefinitions><ListBox x:Name="AdminUsersList" SelectionChanged="AdminUsersList_SelectionChanged"/>
+                    <Border Grid.Column="1" Background="{StaticResource PanelBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="12" Padding="18" Margin="16,0,0,0"><StackPanel><TextBlock Text="Ações" FontSize="17" FontWeight="Bold"/><ComboBox x:Name="LicenseBox" Margin="0,12,0,10" SelectedIndex="0"><ComboBoxItem Content="1 mês" Tag="1m"/><ComboBoxItem Content="3 meses" Tag="3m"/><ComboBoxItem Content="6 meses" Tag="6m"/><ComboBoxItem Content="12 meses" Tag="12m"/><ComboBoxItem Content="Permanente" Tag="permanent"/></ComboBox><Button Style="{StaticResource PrimaryButton}" Content="Aprovar / renovar" Click="ApproveUser_Click"/><Button Content="Suspender" Margin="0,8,0,0" Click="SuspendUser_Click"/><Button Content="Reativar" Margin="0,8,0,0" Click="ReactivateUser_Click"/><Button Content="Revogar" Margin="0,8,0,0" Click="RevokeUser_Click"/></StackPanel></Border>
+                </Grid>
+            </Grid></TabItem>
+        </TabControl>
+    </Grid>
+</Window>
