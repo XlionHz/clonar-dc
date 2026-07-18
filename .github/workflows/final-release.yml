@@ -44,23 +44,61 @@ jobs:
         run: |
           $ErrorActionPreference = 'Stop'
           New-Item -ItemType Directory -Force -Path out/app | Out-Null
-          dotnet publish .\src\ClonarDC.Desktop\ClonarDC.Desktop.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=false -p:DebugType=None -p:DebugSymbols=false -p:Version=3.0.0 -o out/app
+          dotnet publish .\src\ClonarDC.Desktop\ClonarDC.Desktop.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=false -p:DebugType=None -p:DebugSymbols=false -p:Version=0.4.0 -o out/app
           if (-not (Test-Path out/app/ClonarDC.exe)) { throw 'ClonarDC.exe não foi gerado.' }
 
       - name: Restore and build backend
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          if (Test-Path .\src\ClonarDC.Server\ClonarDC.Server.csproj) {
-            dotnet restore .\src\ClonarDC.Server\ClonarDC.Server.csproj
-            $backendOutput = & dotnet build .\src\ClonarDC.Server\ClonarDC.Server.csproj -c Release --no-restore 2>&1
-            $backendOutput | Tee-Object -FilePath build-status\backend-build.log | Write-Host
-            if ($LASTEXITCODE -ne 0) {
-              $backendOutput | Select-Object -Last 160 | Set-Content build-status\backend-error.txt
-              throw 'Backend build failed.'
+          dotnet restore .\src\ClonarDC.Server\ClonarDC.Server.csproj
+          $backendOutput = & dotnet build .\src\ClonarDC.Server\ClonarDC.Server.csproj -c Release --no-restore 2>&1
+          $backendOutput | Tee-Object -FilePath build-status\backend-build.log | Write-Host
+          if ($LASTEXITCODE -ne 0) {
+            $backendOutput | Select-Object -Last 160 | Set-Content build-status\backend-error.txt
+            throw 'Backend build failed.'
+          }
+          New-Item -ItemType Directory -Force -Path out/backend | Out-Null
+          dotnet publish .\src\ClonarDC.Server\ClonarDC.Server.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=false -p:DebugType=None -p:DebugSymbols=false -o out/backend
+          if (-not (Test-Path out/backend/ClonarDC.Server.exe)) { throw 'Backend local não foi gerado.' }
+
+      - name: Account backend integration smoke test
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $testData = Join-Path $env:RUNNER_TEMP 'clonardc-auth-smoke'
+          Remove-Item $testData -Recurse -Force -ErrorAction SilentlyContinue
+          New-Item -ItemType Directory -Force -Path $testData | Out-Null
+          $env:CLONARDC_LISTEN = 'http://127.0.0.1:18787'
+          $env:CLONARDC_DATA = $testData
+          $env:CLONARDC_ADMIN_EMAIL = 'build-admin@example.invalid'
+          $env:CLONARDC_ADMIN_PASSWORD = 'BuildOnly!Admin_2026'
+          $backend = Start-Process -FilePath "$PWD\out\backend\ClonarDC.Server.exe" -PassThru -WindowStyle Hidden
+          try {
+            $ready = $false
+            for ($i = 0; $i -lt 40; $i++) {
+              try {
+                Invoke-RestMethod -Uri 'http://127.0.0.1:18787/status' -TimeoutSec 1 | Out-Null
+                $ready = $true
+                break
+              } catch { Start-Sleep -Milliseconds 250 }
             }
-            New-Item -ItemType Directory -Force -Path out/backend | Out-Null
-            dotnet publish .\src\ClonarDC.Server\ClonarDC.Server.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=false -p:DebugType=None -p:DebugSymbols=false -o out/backend
+            if (-not $ready) { throw 'Backend de contas não iniciou no smoke test.' }
+            $suffix = [Guid]::NewGuid().ToString('N')
+            $email = "user-$suffix@example.invalid"
+            $password = 'BuildOnly!User_2026'
+            $register = Invoke-RestMethod -Method Post -Uri 'http://127.0.0.1:18787/auth/register' -ContentType 'application/json' -Body (@{ name='Build User'; email=$email; password=$password } | ConvertTo-Json)
+            if ($register.status -ne 'pending') { throw 'Cadastro não retornou status pending.' }
+            $login = Invoke-RestMethod -Method Post -Uri 'http://127.0.0.1:18787/auth/login' -ContentType 'application/json' -Body (@{ email='build-admin@example.invalid'; password='BuildOnly!Admin_2026' } | ConvertTo-Json)
+            if ($login.user.role -ne 'admin') { throw 'Login administrativo não retornou role admin.' }
+            'Registration and owner-style admin login succeeded.' | Set-Content out/auth-smoke.txt
+          }
+          finally {
+            if ($backend -and -not $backend.HasExited) { Stop-Process -Id $backend.Id -Force }
+            Remove-Item Env:CLONARDC_LISTEN -ErrorAction SilentlyContinue
+            Remove-Item Env:CLONARDC_DATA -ErrorAction SilentlyContinue
+            Remove-Item Env:CLONARDC_ADMIN_EMAIL -ErrorAction SilentlyContinue
+            Remove-Item Env:CLONARDC_ADMIN_PASSWORD -ErrorAction SilentlyContinue
           }
 
       - name: Desktop runtime smoke test
@@ -71,7 +109,7 @@ jobs:
           Start-Sleep -Seconds 8
           if ($proc.HasExited) { throw "ClonarDC.exe encerrou prematuramente com código $($proc.ExitCode)." }
           Stop-Process -Id $proc.Id -Force
-          "Desktop process stayed alive for 8 seconds on windows-latest." | Set-Content out/smoke-runtime.txt
+          'Desktop process stayed alive for 8 seconds on windows-latest.' | Set-Content out/smoke-runtime.txt
 
       - name: Install Inno Setup
         shell: pwsh
@@ -83,11 +121,11 @@ jobs:
           $ErrorActionPreference = 'Stop'
           $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
           if (-not (Test-Path $iscc)) { throw 'ISCC.exe não encontrado.' }
-          & $iscc "installer\ClonarDC.iss"
-          if (-not (Test-Path "out\installer\Clonar-DC-Setup.exe")) { throw 'Setup.exe não foi gerado.' }
-          $hash = (Get-FileHash "out\installer\Clonar-DC-Setup.exe" -Algorithm SHA256).Hash
-          $hash | Set-Content "out\installer\Clonar-DC-Setup.sha256"
-          "SHA256=$hash" | Set-Content "out\installer\build-info.txt"
+          & $iscc 'installer\ClonarDC.iss'
+          if (-not (Test-Path 'out\installer\Clonar-DC-Setup.exe')) { throw 'Setup.exe não foi gerado.' }
+          $hash = (Get-FileHash 'out\installer\Clonar-DC-Setup.exe' -Algorithm SHA256).Hash
+          $hash | Set-Content 'out\installer\Clonar-DC-Setup.sha256'
+          "SHA256=$hash" | Set-Content 'out\installer\build-info.txt'
 
       - name: Install and launch smoke test
         shell: pwsh
@@ -96,13 +134,16 @@ jobs:
           $setup = "$PWD\out\installer\Clonar-DC-Setup.exe"
           $install = Start-Process -FilePath $setup -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/SP-' -Wait -PassThru
           if ($install.ExitCode -ne 0) { throw "Instalador retornou código $($install.ExitCode)." }
-          $exe = Join-Path $env:LOCALAPPDATA 'Programs\Clonar DC\ClonarDC.exe'
+          $installRoot = Join-Path $env:LOCALAPPDATA 'Programs\Clonar DC'
+          $exe = Join-Path $installRoot 'ClonarDC.exe'
+          $backendExe = Join-Path $installRoot 'backend\ClonarDC.Server.exe'
           if (-not (Test-Path $exe)) { throw "Executável instalado não encontrado: $exe" }
+          if (-not (Test-Path $backendExe)) { throw "Backend instalado não encontrado: $backendExe" }
           $proc = Start-Process -FilePath $exe -PassThru
           Start-Sleep -Seconds 8
           if ($proc.HasExited) { throw "Aplicativo instalado encerrou prematuramente com código $($proc.ExitCode)." }
           Stop-Process -Id $proc.Id -Force
-          "Installer succeeded and installed app stayed alive for 8 seconds." | Set-Content out/installer/smoke-install.txt
+          'Installer succeeded, included account backend, and installed app stayed alive for 8 seconds.' | Set-Content out/installer/smoke-install.txt
 
       - name: Upload verified build artifacts
         uses: actions/upload-artifact@v4
@@ -114,6 +155,7 @@ jobs:
             out/installer/build-info.txt
             out/installer/smoke-install.txt
             out/smoke-runtime.txt
+            out/auth-smoke.txt
           if-no-files-found: error
 
       - name: Create GitHub release
@@ -122,30 +164,32 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           $ErrorActionPreference = 'Stop'
-          $tag = "v3.0.0-rc.$env:GITHUB_RUN_NUMBER"
-          $title = "Clonar DC 3.0.0 RC $env:GITHUB_RUN_NUMBER"
-          $notes = "Build Windows verificada automaticamente: compile, publish self-contained, smoke test do executável, instalação silenciosa e smoke test do aplicativo instalado. Faça o primeiro teste de clonagem apenas em servidores descartáveis."
-          gh release create $tag "out/installer/Clonar-DC-Setup.exe" "out/installer/Clonar-DC-Setup.sha256" "out/installer/smoke-install.txt" "out/smoke-runtime.txt" --title $title --notes $notes --target $env:GITHUB_SHA
+          $tag = "v0.4.0-alpha.$env:GITHUB_RUN_NUMBER"
+          $title = "Clonar DC 0.4.0 Alpha $env:GITHUB_RUN_NUMBER"
+          $notes = 'Build Windows verificada automaticamente: compilação, backend de contas, cadastro, login administrativo, publish self-contained, instalação e inicialização do aplicativo. Faça o primeiro teste de clonagem apenas em servidores descartáveis.'
+          gh release create $tag 'out/installer/Clonar-DC-Setup.exe' 'out/installer/Clonar-DC-Setup.sha256' 'out/installer/smoke-install.txt' 'out/smoke-runtime.txt' 'out/auth-smoke.txt' --title $title --notes $notes --target $env:GITHUB_SHA
 
       - name: Record successful build status
         if: success()
         shell: pwsh
         run: |
-          $hash = (Get-Content "out\installer\Clonar-DC-Setup.sha256" -Raw).Trim()
+          $hash = (Get-Content 'out\installer\Clonar-DC-Setup.sha256' -Raw).Trim()
           @"
           # Última build verificada
 
           Status: **SUCESSO**
-          Versão: `3.0.0-rc.${{ github.run_number }}`
+          Versão: `0.4.0-alpha.${{ github.run_number }}`
           Commit de origem: `${{ github.sha }}`
           Workflow run: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
-          Release: https://github.com/${{ github.repository }}/releases/tag/v3.0.0-rc.${{ github.run_number }}
+          Release: https://github.com/${{ github.repository }}/releases/tag/v0.4.0-alpha.${{ github.run_number }}
           SHA-256: `$hash`
+
+          Validação automatizada: desktop e backend compilados, cadastro e login administrativo testados, instalador criado, backend incluído e aplicativo instalado iniciado.
           "@ | Set-Content build-status/latest.md -Encoding UTF8
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add build-status
-          git commit -m "ci: record verified Windows build [skip ci]"
+          git commit -m 'ci: record verified Windows build [skip ci]'
           git push
 
       - name: Record failure status
@@ -162,8 +206,8 @@ jobs:
 
           Consulte os arquivos de diagnóstico nesta pasta.
           "@ | Set-Content build-status/latest.md -Encoding UTF8
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add build-status
-          git commit -m "ci: record failed Windows build diagnostics [skip ci]" || exit 0
+          git commit -m 'ci: record failed Windows build diagnostics [skip ci]' || exit 0
           git push || exit 0
