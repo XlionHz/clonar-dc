@@ -14,12 +14,29 @@ internal static class LocalBackendManager
         string? bootstrapAdminPassword = null,
         CancellationToken cancellationToken = default)
     {
-        if (!IsLocalAddress(baseUrl) || await IsReadyAsync(baseUrl, cancellationToken)) return;
+        if (!IsLocalAddress(baseUrl)) return;
+
+        var bootstrapRequested =
+            !string.IsNullOrWhiteSpace(bootstrapAdminEmail) &&
+            !string.IsNullOrWhiteSpace(bootstrapAdminPassword);
+
+        if (!bootstrapRequested && await IsReadyAsync(baseUrl, cancellationToken)) return;
 
         await Gate.WaitAsync(cancellationToken);
         try
         {
-            if (await IsReadyAsync(baseUrl, cancellationToken)) return;
+            if (bootstrapRequested && _process is { HasExited: false })
+            {
+                _process.Kill(entireProcessTree: true);
+                await _process.WaitForExitAsync(cancellationToken);
+                _process.Dispose();
+                _process = null;
+                await Task.Delay(300, cancellationToken);
+            }
+            else if (await IsReadyAsync(baseUrl, cancellationToken))
+            {
+                return;
+            }
 
             var backendExe = Path.Combine(AppContext.BaseDirectory, "backend", "ClonarDC.Server.exe");
             if (!File.Exists(backendExe))
@@ -42,10 +59,10 @@ internal static class LocalBackendManager
             startInfo.Environment["CLONARDC_LISTEN"] = baseUrl;
             startInfo.Environment["CLONARDC_DATA"] = dataDirectory;
 
-            if (!string.IsNullOrWhiteSpace(bootstrapAdminEmail) && !string.IsNullOrWhiteSpace(bootstrapAdminPassword))
+            if (bootstrapRequested)
             {
-                startInfo.Environment["CLONARDC_ADMIN_EMAIL"] = bootstrapAdminEmail;
-                startInfo.Environment["CLONARDC_ADMIN_PASSWORD"] = bootstrapAdminPassword;
+                startInfo.Environment["CLONARDC_ADMIN_EMAIL"] = bootstrapAdminEmail!;
+                startInfo.Environment["CLONARDC_ADMIN_PASSWORD"] = bootstrapAdminPassword!;
             }
 
             _process = Process.Start(startInfo)
