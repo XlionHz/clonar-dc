@@ -1,7 +1,9 @@
-  ClonarDC.Desktop -> D:\a\clonar-dc\clonar-dc\src\ClonarDC.Desktop\bin\Release\net10.0-windows\ClonarDC.dll
+D:\a\clonar-dc\clonar-dc\src\ClonarDC.Desktop\MainWindow.Account.cs(9,29): error CS0111: Type 'MainWindow' already defines a member called 'OnContentRendered' with the same parameter types [D:\a\clonar-dc\clonar-dc\src\ClonarDC.Desktop\ClonarDC.Desktop.csproj]
 
-Build succeeded.
+Build FAILED.
+
+D:\a\clonar-dc\clonar-dc\src\ClonarDC.Desktop\MainWindow.Account.cs(9,29): error CS0111: Type 'MainWindow' already defines a member called 'OnContentRendered' with the same parameter types [D:\a\clonar-dc\clonar-dc\src\ClonarDC.Desktop\ClonarDC.Desktop.csproj]
     0 Warning(s)
-    0 Error(s)
+    1 Error(s)
 
-Time Elapsed 00:00:04.02
+Time Elapsed 00:00:02.39

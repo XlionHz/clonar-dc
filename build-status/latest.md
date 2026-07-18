@@ -1,8 +1,7 @@
 # Última build verificada
 
-Status: **SUCESSO**
-Versão: 3.0.0-rc.4
-Commit de origem: 5fd1d2cf54f42ff87395a04a0796ad88df317127
-Workflow run: https://github.com/XlionHz/clonar-dc/actions/runs/29655426334
-Release: https://github.com/XlionHz/clonar-dc/releases/tag/v3.0.0-rc.4
-SHA-256: $hash
+Status: **FALHA**
+Commit de origem: 7a3d2a6fe7c48182cf0d042ea3cf804a8cf8c2e6
+Workflow run: https://github.com/XlionHz/clonar-dc/actions/runs/29664149944
+
+Consulte os arquivos de diagnóstico nesta pasta.
