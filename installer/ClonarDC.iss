@@ -1,5 +1,5 @@
 #define MyAppName "Clonar DC"
-#define MyAppVersion "0.3.0"
+#define MyAppVersion "0.4.0"
 #define MyAppPublisher "Clonar DC"
 #define MyAppExeName "ClonarDC.exe"
 
@@ -17,6 +17,8 @@ OutputBaseFilename=Clonar-DC-Setup
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
+SetupIconFile=..\src\ClonarDC.Desktop\Assets\ClonarDC.ico
+UninstallDisplayIcon={app}\{#MyAppExeName}
 UninstallDisplayName=Clonar DC
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
@@ -25,10 +27,11 @@ RestartApplications=no
 
 [Files]
 Source: "..\out\app\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "..\out\backend\*"; DestDir: "{app}\backend"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
-Name: "{autoprograms}\Clonar DC"; Filename: "{app}\{#MyAppExeName}"
-Name: "{autodesktop}\Clonar DC"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon
+Name: "{autoprograms}\Clonar DC"; Filename: "{app}\{#MyAppExeName}"; IconFilename: "{app}\{#MyAppExeName}"
+Name: "{autodesktop}\Clonar DC"; Filename: "{app}\{#MyAppExeName}"; IconFilename: "{app}\{#MyAppExeName}"; Tasks: desktopicon
 
 [Tasks]
 Name: "desktopicon"; Description: "Criar atalho na Área de Trabalho"; GroupDescription: "Atalhos:"; Flags: unchecked
