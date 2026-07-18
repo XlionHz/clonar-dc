@@ -1,0 +1,194 @@
+name: Clonar DC Verified Windows Release
+
+on:
+  push:
+    branches: [ main ]
+    paths-ignore:
+      - 'build-status/**'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-release:
+    runs-on: windows-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Reconstruct source bundle
+        id: source
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $parts = Get-ChildItem -Path bootstrap -Filter 'part-*.txt' | Sort-Object Name
+          if (-not $parts) { throw 'Nenhum bootstrap/part-*.txt encontrado.' }
+          $b64 = ($parts | ForEach-Object { Get-Content $_.FullName -Raw }) -join ''
+          $bytes = [Convert]::FromBase64String(($b64 -replace '\s',''))
+          [IO.File]::WriteAllBytes((Join-Path $PWD 'project.zip'), $bytes)
+          New-Item -ItemType Directory -Force -Path extracted | Out-Null
+          Expand-Archive -Path project.zip -DestinationPath extracted -Force
+          $root = Get-ChildItem extracted -Directory | Select-Object -First 1
+          if (-not $root) { throw 'Raiz do projeto não encontrada após extração.' }
+          "root=$($root.FullName)" >> $env:GITHUB_OUTPUT
+          Write-Host "Project root: $($root.FullName)"
+
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Restore
+        shell: pwsh
+        run: dotnet restore "${{ steps.source.outputs.root }}\ClonarDC.slnx"
+
+      - name: Build
+        shell: pwsh
+        run: dotnet build "${{ steps.source.outputs.root }}\ClonarDC.slnx" -c Release --no-restore
+
+      - name: Test
+        shell: pwsh
+        run: dotnet test "${{ steps.source.outputs.root }}\tests\ClonarDC.Tests\ClonarDC.Tests.csproj" -c Release --no-build --logger "trx;LogFileName=tests.trx"
+
+      - name: Publish desktop self-contained
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          New-Item -ItemType Directory -Force -Path out/app | Out-Null
+          dotnet publish "${{ steps.source.outputs.root }}\src\ClonarDC.App\ClonarDC.App.csproj" -c Release -r win-x64 --self-contained true -p:PublishSingleFile=false -p:DebugType=None -p:DebugSymbols=false -p:Version=3.0.0 -o out/app
+          if (-not (Test-Path out/app/ClonarDC.exe)) { throw 'ClonarDC.exe não foi gerado.' }
+
+      - name: Publish local test backend self-contained
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          New-Item -ItemType Directory -Force -Path out/backend | Out-Null
+          dotnet publish "${{ steps.source.outputs.root }}\src\ClonarDC.Api\ClonarDC.Api.csproj" -c Release -r win-x64 --self-contained true -p:PublishSingleFile=false -p:DebugType=None -p:DebugSymbols=false -o out/backend
+
+      - name: Desktop runtime smoke test
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $proc = Start-Process -FilePath "$PWD\out\app\ClonarDC.exe" -PassThru
+          Start-Sleep -Seconds 8
+          if ($proc.HasExited) { throw "ClonarDC.exe encerrou prematuramente com código $($proc.ExitCode)." }
+          Stop-Process -Id $proc.Id -Force
+          "Desktop process stayed alive for 8 seconds on windows-latest." | Set-Content out/smoke-runtime.txt
+
+      - name: Install Inno Setup
+        shell: pwsh
+        run: choco install innosetup --no-progress -y
+
+      - name: Build installer
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) { throw 'ISCC.exe não encontrado.' }
+          & $iscc "installer\ClonarDC.iss"
+          if (-not (Test-Path "out\installer\Clonar-DC-Setup.exe")) { throw 'Setup.exe não foi gerado.' }
+          $hash = (Get-FileHash "out\installer\Clonar-DC-Setup.exe" -Algorithm SHA256).Hash
+          $hash | Set-Content "out\installer\Clonar-DC-Setup.sha256"
+          "SHA256=$hash" | Set-Content "out\installer\build-info.txt"
+
+      - name: Install and launch smoke test
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $setup = "$PWD\out\installer\Clonar-DC-Setup.exe"
+          $install = Start-Process -FilePath $setup -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/SP-' -Wait -PassThru
+          if ($install.ExitCode -ne 0) { throw "Instalador retornou código $($install.ExitCode)." }
+          $exe = Join-Path $env:LOCALAPPDATA 'Programs\Clonar DC\ClonarDC.exe'
+          if (-not (Test-Path $exe)) { throw "Executável instalado não encontrado: $exe" }
+          $proc = Start-Process -FilePath $exe -PassThru
+          Start-Sleep -Seconds 8
+          if ($proc.HasExited) { throw "Aplicativo instalado encerrou prematuramente com código $($proc.ExitCode)." }
+          Stop-Process -Id $proc.Id -Force
+          "Installer succeeded and installed app stayed alive for 8 seconds." | Set-Content out/installer/smoke-install.txt
+
+      - name: Upload verified build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: Clonar-DC-Verified-Windows
+          path: |
+            out/installer/Clonar-DC-Setup.exe
+            out/installer/Clonar-DC-Setup.sha256
+            out/installer/build-info.txt
+            out/installer/smoke-install.txt
+            out/smoke-runtime.txt
+          if-no-files-found: error
+
+      - name: Create GitHub release
+        id: release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $tag = "v3.0.0-rc.$env:GITHUB_RUN_NUMBER"
+          $title = "Clonar DC 3.0.0 RC $env:GITHUB_RUN_NUMBER"
+          $notes = @"
+          Build automatizada e validada em runner Windows.
+
+          Evidências desta build:
+          - restore/build concluídos;
+          - testes automatizados concluídos;
+          - publish self-contained win-x64 concluído;
+          - ClonarDC.exe permaneceu aberto no smoke test;
+          - Setup.exe instalado silenciosamente;
+          - aplicativo instalado permaneceu aberto no smoke test;
+          - SHA-256 incluído nos assets.
+
+          Ainda requer validação manual com bot oficial em servidores descartáveis antes de uso destrutivo em produção.
+          "@
+          gh release create $tag "out/installer/Clonar-DC-Setup.exe" "out/installer/Clonar-DC-Setup.sha256" "out/installer/smoke-install.txt" "out/smoke-runtime.txt" --title $title --notes $notes --target $env:GITHUB_SHA
+          "tag=$tag" >> $env:GITHUB_OUTPUT
+          "url=https://github.com/${{ github.repository }}/releases/tag/$tag" >> $env:GITHUB_OUTPUT
+
+      - name: Record successful build status
+        if: success()
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          New-Item -ItemType Directory -Force -Path build-status | Out-Null
+          $hash = Get-Content "out\installer\Clonar-DC-Setup.sha256" -Raw
+          @"
+          # Última build verificada
+
+          Status: **SUCESSO**
+          Versão: `3.0.0-rc.${{ github.run_number }}`
+          Commit de origem: `${{ github.sha }}`
+          Workflow run: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          Release: https://github.com/${{ github.repository }}/releases/tag/v3.0.0-rc.${{ github.run_number }}
+          SHA-256: `$($hash.Trim())`
+
+          Validação automatizada: build, testes, publish self-contained, inicialização do executável, instalação silenciosa e inicialização do app instalado.
+          "@ | Set-Content build-status/latest.md -Encoding UTF8
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add build-status/latest.md
+          git commit -m "ci: record verified Windows build [skip ci]"
+          git push
+
+      - name: Record failure status
+        if: failure()
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path build-status | Out-Null
+          @"
+          # Última build verificada
+
+          Status: **FALHA**
+          Commit de origem: `${{ github.sha }}`
+          Workflow run: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+          A build não deve ser tratada como pronta até a falha ser corrigida e um novo run concluir com sucesso.
+          "@ | Set-Content build-status/latest.md -Encoding UTF8
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add build-status/latest.md
+          git commit -m "ci: record failed Windows build [skip ci]" || exit 0
+          git push || exit 0
