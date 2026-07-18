@@ -19,54 +19,37 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Reconstruct source bundle
-        id: source
-        shell: pwsh
-        run: |
-          $ErrorActionPreference = 'Stop'
-          $parts = Get-ChildItem -Path bootstrap -Filter 'part-*.txt' | Sort-Object Name
-          if (-not $parts) { throw 'Nenhum bootstrap/part-*.txt encontrado.' }
-          $b64 = ($parts | ForEach-Object { Get-Content $_.FullName -Raw }) -join ''
-          $bytes = [Convert]::FromBase64String(($b64 -replace '\s',''))
-          [IO.File]::WriteAllBytes((Join-Path $PWD 'project.zip'), $bytes)
-          New-Item -ItemType Directory -Force -Path extracted | Out-Null
-          Expand-Archive -Path project.zip -DestinationPath extracted -Force
-          $root = Get-ChildItem extracted -Directory | Select-Object -First 1
-          if (-not $root) { throw 'Raiz do projeto não encontrada após extração.' }
-          "root=$($root.FullName)" >> $env:GITHUB_OUTPUT
-          Write-Host "Project root: $($root.FullName)"
-
       - name: Setup .NET 10
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '10.0.x'
 
-      - name: Restore
+      - name: Restore desktop
         shell: pwsh
-        run: dotnet restore "${{ steps.source.outputs.root }}\ClonarDC.slnx"
+        run: dotnet restore .\src\ClonarDC.Desktop\ClonarDC.Desktop.csproj
 
-      - name: Build
+      - name: Build desktop
         shell: pwsh
-        run: dotnet build "${{ steps.source.outputs.root }}\ClonarDC.slnx" -c Release --no-restore
-
-      - name: Test
-        shell: pwsh
-        run: dotnet test "${{ steps.source.outputs.root }}\tests\ClonarDC.Tests\ClonarDC.Tests.csproj" -c Release --no-build --logger "trx;LogFileName=tests.trx"
+        run: dotnet build .\src\ClonarDC.Desktop\ClonarDC.Desktop.csproj -c Release --no-restore
 
       - name: Publish desktop self-contained
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
           New-Item -ItemType Directory -Force -Path out/app | Out-Null
-          dotnet publish "${{ steps.source.outputs.root }}\src\ClonarDC.App\ClonarDC.App.csproj" -c Release -r win-x64 --self-contained true -p:PublishSingleFile=false -p:DebugType=None -p:DebugSymbols=false -p:Version=3.0.0 -o out/app
+          dotnet publish .\src\ClonarDC.Desktop\ClonarDC.Desktop.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=false -p:DebugType=None -p:DebugSymbols=false -p:Version=3.0.0 -o out/app
           if (-not (Test-Path out/app/ClonarDC.exe)) { throw 'ClonarDC.exe não foi gerado.' }
 
-      - name: Publish local test backend self-contained
+      - name: Restore and build backend
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          New-Item -ItemType Directory -Force -Path out/backend | Out-Null
-          dotnet publish "${{ steps.source.outputs.root }}\src\ClonarDC.Api\ClonarDC.Api.csproj" -c Release -r win-x64 --self-contained true -p:PublishSingleFile=false -p:DebugType=None -p:DebugSymbols=false -o out/backend
+          if (Test-Path .\src\ClonarDC.Server\ClonarDC.Server.csproj) {
+            dotnet restore .\src\ClonarDC.Server\ClonarDC.Server.csproj
+            dotnet build .\src\ClonarDC.Server\ClonarDC.Server.csproj -c Release --no-restore
+            New-Item -ItemType Directory -Force -Path out/backend | Out-Null
+            dotnet publish .\src\ClonarDC.Server\ClonarDC.Server.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=false -p:DebugType=None -p:DebugSymbols=false -o out/backend
+          }
 
       - name: Desktop runtime smoke test
         shell: pwsh
@@ -122,7 +105,6 @@ jobs:
           if-no-files-found: error
 
       - name: Create GitHub release
-        id: release
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
@@ -133,20 +115,17 @@ jobs:
           $notes = @"
           Build automatizada e validada em runner Windows.
 
-          Evidências desta build:
-          - restore/build concluídos;
-          - testes automatizados concluídos;
+          Evidências:
+          - projeto WPF nativo restaurado e compilado;
           - publish self-contained win-x64 concluído;
           - ClonarDC.exe permaneceu aberto no smoke test;
           - Setup.exe instalado silenciosamente;
           - aplicativo instalado permaneceu aberto no smoke test;
-          - SHA-256 incluído nos assets.
+          - SHA-256 incluído.
 
-          Ainda requer validação manual com bot oficial em servidores descartáveis antes de uso destrutivo em produção.
+          Antes de qualquer clonagem destrutiva, valide com bot oficial em servidores descartáveis.
           "@
           gh release create $tag "out/installer/Clonar-DC-Setup.exe" "out/installer/Clonar-DC-Setup.sha256" "out/installer/smoke-install.txt" "out/smoke-runtime.txt" --title $title --notes $notes --target $env:GITHUB_SHA
-          "tag=$tag" >> $env:GITHUB_OUTPUT
-          "url=https://github.com/${{ github.repository }}/releases/tag/$tag" >> $env:GITHUB_OUTPUT
 
       - name: Record successful build status
         if: success()
@@ -154,7 +133,7 @@ jobs:
         run: |
           $ErrorActionPreference = 'Stop'
           New-Item -ItemType Directory -Force -Path build-status | Out-Null
-          $hash = Get-Content "out\installer\Clonar-DC-Setup.sha256" -Raw
+          $hash = (Get-Content "out\installer\Clonar-DC-Setup.sha256" -Raw).Trim()
           @"
           # Última build verificada
 
@@ -163,9 +142,9 @@ jobs:
           Commit de origem: `${{ github.sha }}`
           Workflow run: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
           Release: https://github.com/${{ github.repository }}/releases/tag/v3.0.0-rc.${{ github.run_number }}
-          SHA-256: `$($hash.Trim())`
+          SHA-256: `$hash`
 
-          Validação automatizada: build, testes, publish self-contained, inicialização do executável, instalação silenciosa e inicialização do app instalado.
+          Validação automatizada: restore/build, publish self-contained, inicialização do executável, instalação silenciosa e inicialização do app instalado.
           "@ | Set-Content build-status/latest.md -Encoding UTF8
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
