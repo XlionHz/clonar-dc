@@ -1,20 +1,19 @@
 <Window x:Class="ClonarDC.LoginWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Clonar DC" Width="980" Height="620" WindowStartupLocation="CenterScreen" ResizeMode="CanMinimize">
+        Title="Clonar DC" Icon="/ClonarDC;component/Assets/ClonarDC.ico"
+        Width="980" Height="620" WindowStartupLocation="CenterScreen" ResizeMode="CanMinimize">
     <Grid>
         <Grid.ColumnDefinitions><ColumnDefinition Width="1.05*"/><ColumnDefinition Width="0.95*"/></Grid.ColumnDefinitions>
         <Border Grid.Column="0" Background="#0B0C14" Padding="60">
             <StackPanel VerticalAlignment="Center">
-                <Border Width="78" Height="78" CornerRadius="22" Background="#6D28D9" HorizontalAlignment="Left" Margin="0,0,0,24">
-                    <Grid><TextBlock Text="DC" FontSize="28" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center"/></Grid>
-                </Border>
+                <Image Source="/ClonarDC;component/Assets/ClonarDCLogo.png" Width="108" Height="108" HorizontalAlignment="Left" Margin="0,0,0,22"/>
                 <TextBlock Text="Clonar DC" FontSize="38" FontWeight="Bold"/>
                 <TextBlock Text="Estruturas, backups e clonagem com controle." FontSize="18" Foreground="{StaticResource MutedBrush}" Margin="0,10,0,28" TextWrapping="Wrap"/>
                 <TextBlock Text="• Análise antes de alterar" FontSize="15" Margin="0,6"/>
                 <TextBlock Text="• Backup automático em operações destrutivas" FontSize="15" Margin="0,6"/>
                 <TextBlock Text="• Token protegido localmente no Windows" FontSize="15" Margin="0,6"/>
-                <TextBlock Text="• Sem navegador, sem localhost como interface" FontSize="15" Margin="0,6"/>
+                <TextBlock Text="• Aplicativo nativo, sem navegador como interface" FontSize="15" Margin="0,6"/>
             </StackPanel>
         </Border>
         <Border Grid.Column="1" Background="{StaticResource PanelBrush}" Padding="54">
@@ -35,7 +34,6 @@
                         <TextBlock Text="Qualquer dúvida, abra um ticket em Dúvidas no Discord." Foreground="{StaticResource MutedBrush}" TextWrapping="Wrap" Margin="0,6,0,0"/>
                     </StackPanel>
                 </Border>
-                <Button x:Name="DevButton" Content="Abrir modo local de desenvolvimento" Visibility="Collapsed" Margin="0,14,0,0" Click="DevButton_Click"/>
             </StackPanel>
         </Border>
     </Grid>
