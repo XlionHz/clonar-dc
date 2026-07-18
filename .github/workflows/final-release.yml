@@ -30,7 +30,14 @@ jobs:
 
       - name: Build desktop
         shell: pwsh
-        run: dotnet build .\src\ClonarDC.Desktop\ClonarDC.Desktop.csproj -c Release --no-restore
+        run: |
+          New-Item -ItemType Directory -Force -Path build-status | Out-Null
+          $output = & dotnet build .\src\ClonarDC.Desktop\ClonarDC.Desktop.csproj -c Release --no-restore 2>&1
+          $output | Tee-Object -FilePath build-status\desktop-build.log | Write-Host
+          if ($LASTEXITCODE -ne 0) {
+            $output | Select-Object -Last 160 | Set-Content build-status\compile-error.txt
+            throw 'Desktop build failed.'
+          }
 
       - name: Publish desktop self-contained
         shell: pwsh
@@ -46,7 +53,12 @@ jobs:
           $ErrorActionPreference = 'Stop'
           if (Test-Path .\src\ClonarDC.Server\ClonarDC.Server.csproj) {
             dotnet restore .\src\ClonarDC.Server\ClonarDC.Server.csproj
-            dotnet build .\src\ClonarDC.Server\ClonarDC.Server.csproj -c Release --no-restore
+            $backendOutput = & dotnet build .\src\ClonarDC.Server\ClonarDC.Server.csproj -c Release --no-restore 2>&1
+            $backendOutput | Tee-Object -FilePath build-status\backend-build.log | Write-Host
+            if ($LASTEXITCODE -ne 0) {
+              $backendOutput | Select-Object -Last 160 | Set-Content build-status\backend-error.txt
+              throw 'Backend build failed.'
+            }
             New-Item -ItemType Directory -Force -Path out/backend | Out-Null
             dotnet publish .\src\ClonarDC.Server\ClonarDC.Server.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=false -p:DebugType=None -p:DebugSymbols=false -o out/backend
           }
@@ -112,27 +124,13 @@ jobs:
           $ErrorActionPreference = 'Stop'
           $tag = "v3.0.0-rc.$env:GITHUB_RUN_NUMBER"
           $title = "Clonar DC 3.0.0 RC $env:GITHUB_RUN_NUMBER"
-          $notes = @"
-          Build automatizada e validada em runner Windows.
-
-          Evidências:
-          - projeto WPF nativo restaurado e compilado;
-          - publish self-contained win-x64 concluído;
-          - ClonarDC.exe permaneceu aberto no smoke test;
-          - Setup.exe instalado silenciosamente;
-          - aplicativo instalado permaneceu aberto no smoke test;
-          - SHA-256 incluído.
-
-          Antes de qualquer clonagem destrutiva, valide com bot oficial em servidores descartáveis.
-          "@
+          $notes = "Build Windows verificada automaticamente: compile, publish self-contained, smoke test do executável, instalação silenciosa e smoke test do aplicativo instalado. Faça o primeiro teste de clonagem apenas em servidores descartáveis."
           gh release create $tag "out/installer/Clonar-DC-Setup.exe" "out/installer/Clonar-DC-Setup.sha256" "out/installer/smoke-install.txt" "out/smoke-runtime.txt" --title $title --notes $notes --target $env:GITHUB_SHA
 
       - name: Record successful build status
         if: success()
         shell: pwsh
         run: |
-          $ErrorActionPreference = 'Stop'
-          New-Item -ItemType Directory -Force -Path build-status | Out-Null
           $hash = (Get-Content "out\installer\Clonar-DC-Setup.sha256" -Raw).Trim()
           @"
           # Última build verificada
@@ -143,12 +141,10 @@ jobs:
           Workflow run: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
           Release: https://github.com/${{ github.repository }}/releases/tag/v3.0.0-rc.${{ github.run_number }}
           SHA-256: `$hash`
-
-          Validação automatizada: restore/build, publish self-contained, inicialização do executável, instalação silenciosa e inicialização do app instalado.
           "@ | Set-Content build-status/latest.md -Encoding UTF8
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add build-status/latest.md
+          git add build-status
           git commit -m "ci: record verified Windows build [skip ci]"
           git push
 
@@ -164,10 +160,10 @@ jobs:
           Commit de origem: `${{ github.sha }}`
           Workflow run: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
 
-          A build não deve ser tratada como pronta até a falha ser corrigida e um novo run concluir com sucesso.
+          Consulte os arquivos de diagnóstico nesta pasta.
           "@ | Set-Content build-status/latest.md -Encoding UTF8
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add build-status/latest.md
-          git commit -m "ci: record failed Windows build [skip ci]" || exit 0
+          git add build-status
+          git commit -m "ci: record failed Windows build diagnostics [skip ci]" || exit 0
           git push || exit 0
