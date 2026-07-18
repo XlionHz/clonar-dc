@@ -1,0 +1,45 @@
+name: Windows Smoke Test
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'src/**'
+      - '.github/workflows/smoke-windows.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  smoke:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - name: Publish desktop
+        run: dotnet publish src/ClonarDC.Desktop/ClonarDC.Desktop.csproj -c Release -r win-x64 --self-contained true -o out/app
+      - name: Process smoke test
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $p = Start-Process -FilePath (Resolve-Path 'out/app/ClonarDC.exe') -PassThru
+          Start-Sleep -Seconds 7
+          if ($p.HasExited) { throw "ClonarDC.exe encerrou prematuramente com codigo $($p.ExitCode)." }
+          Stop-Process -Id $p.Id -Force
+          "PASS $(Get-Date -Format o) - ClonarDC.exe iniciou e permaneceu ativo por 7 segundos no runner Windows." | Set-Content out/smoke-passed.txt
+      - name: Upload smoke evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: Clonar-DC-Smoke-Evidence
+          path: out/smoke-passed.txt
+      - name: Attach evidence to alpha release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view alpha-latest *> $null
+          if ($LASTEXITCODE -eq 0) { gh release upload alpha-latest out/smoke-passed.txt --clobber }
