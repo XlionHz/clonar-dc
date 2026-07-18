@@ -6,6 +6,12 @@ public partial class MainWindow
 {
     public bool LogoutRequested { get; private set; }
 
+    protected override void OnContentRendered(EventArgs e)
+    {
+        base.OnContentRendered(e);
+        VersionText.Text = "v0.4.0 alpha";
+    }
+
     private void Logout_Click(object sender, RoutedEventArgs e)
     {
         var result = MessageBox.Show(
