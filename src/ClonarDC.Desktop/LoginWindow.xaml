@@ -6,15 +6,15 @@
     <Grid>
         <Grid.ColumnDefinitions><ColumnDefinition Width="1.05*"/><ColumnDefinition Width="0.95*"/></Grid.ColumnDefinitions>
         <Border Grid.Column="0" Background="#0B0C14" Padding="60">
-            <StackPanel VerticalAlignment="Center">
-                <Image Source="/ClonarDC;component/Assets/ClonarDCLogo.png" Width="108" Height="108" HorizontalAlignment="Left" Margin="0,0,0,22"/>
-                <TextBlock Text="Clonar DC" FontSize="38" FontWeight="Bold"/>
-                <TextBlock Text="Estruturas, backups e clonagem com controle." FontSize="18" Foreground="{StaticResource MutedBrush}" Margin="0,10,0,28" TextWrapping="Wrap"/>
-                <TextBlock Text="• Análise antes de alterar" FontSize="15" Margin="0,6"/>
-                <TextBlock Text="• Backup automático em operações destrutivas" FontSize="15" Margin="0,6"/>
-                <TextBlock Text="• Token protegido localmente no Windows" FontSize="15" Margin="0,6"/>
-                <TextBlock Text="• Aplicativo nativo, sem navegador como interface" FontSize="15" Margin="0,6"/>
-            </StackPanel>
+            <Grid>
+                <StackPanel VerticalAlignment="Center">
+                    <Image Source="/ClonarDC;component/Assets/ClonarDCLogo.png" Width="150" Height="150" HorizontalAlignment="Left" Margin="0,0,0,26"/>
+                    <TextBlock Text="Clonar DC" FontSize="42" FontWeight="Bold"/>
+                    <TextBlock Text="CLONE  •  SYNC  •  EVOLVE" FontSize="13" FontWeight="SemiBold" Foreground="#60A5FA" Margin="0,12,0,0"/>
+                    <TextBlock Text="Estruturas de servidores, organizadas com precisão." FontSize="18" Foreground="{StaticResource MutedBrush}" Margin="0,18,0,0" TextWrapping="Wrap" MaxWidth="390"/>
+                </StackPanel>
+                <TextBlock Text="CLONAR DC" VerticalAlignment="Bottom" HorizontalAlignment="Left" Foreground="#444A63" FontSize="10" FontWeight="SemiBold"/>
+            </Grid>
         </Border>
         <Border Grid.Column="1" Background="{StaticResource PanelBrush}" Padding="54">
             <StackPanel VerticalAlignment="Center">
