@@ -13,8 +13,18 @@ public sealed class AuthClient
         _http = new HttpClient { BaseAddress = new Uri(BaseUrl + "/"), Timeout = TimeSpan.FromSeconds(15) };
     }
 
-    public async Task<AppSession> LoginAsync(string email, string password, CancellationToken ct = default)
+    public async Task<AppSession> LoginAsync(
+        string email,
+        string password,
+        bool bootstrapDeveloper = false,
+        CancellationToken ct = default)
     {
+        await LocalBackendManager.EnsureStartedAsync(
+            BaseUrl,
+            bootstrapDeveloper ? DeveloperAccess.Email : null,
+            bootstrapDeveloper ? password : null,
+            ct);
+
         var res = await PostAsync("auth/login", new { email, password }, ct);
         if (!res.IsSuccessStatusCode) throw new InvalidOperationException(await ReadErrorAsync(res, ct));
         var node = JsonNode.Parse(await res.Content.ReadAsStringAsync(ct)) ?? throw new InvalidOperationException("Resposta inválida do servidor.");
@@ -34,6 +44,7 @@ public sealed class AuthClient
 
     public async Task<string> RegisterAsync(string name, string email, string password, CancellationToken ct = default)
     {
+        await LocalBackendManager.EnsureStartedAsync(BaseUrl, cancellationToken: ct);
         var res = await PostAsync("auth/register", new { name, email, password }, ct);
         if (!res.IsSuccessStatusCode) throw new InvalidOperationException(await ReadErrorAsync(res, ct));
         return "Conta criada. Esperando autorização.";
@@ -41,6 +52,7 @@ public sealed class AuthClient
 
     public async Task<List<AdminUserDto>> GetUsersAsync(AppSession session, CancellationToken ct = default)
     {
+        await LocalBackendManager.EnsureStartedAsync(BaseUrl, cancellationToken: ct);
         using var req = new HttpRequestMessage(HttpMethod.Get, "admin/users");
         req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", session.AccessToken);
         using var res = await _http.SendAsync(req, ct);
@@ -50,6 +62,7 @@ public sealed class AuthClient
 
     public async Task AdminActionAsync(AppSession session, string userId, string action, string? license = null, CancellationToken ct = default)
     {
+        await LocalBackendManager.EnsureStartedAsync(BaseUrl, cancellationToken: ct);
         using var req = new HttpRequestMessage(HttpMethod.Post, $"admin/users/{Uri.EscapeDataString(userId)}/{action}")
         {
             Content = JsonContent.Create(new { license })
