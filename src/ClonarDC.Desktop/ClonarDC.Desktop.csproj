@@ -7,9 +7,15 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <AssemblyName>ClonarDC</AssemblyName>
     <RootNamespace>ClonarDC</RootNamespace>
-    <Version>0.3.0</Version>
-    <FileVersion>0.3.0.0</FileVersion>
-    <AssemblyVersion>0.3.0.0</AssemblyVersion>
+    <Version>0.4.0</Version>
+    <FileVersion>0.4.0.0</FileVersion>
+    <AssemblyVersion>0.4.0.0</AssemblyVersion>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>Assets\ClonarDC.ico</ApplicationIcon>
   </PropertyGroup>
+
+  <ItemGroup>
+    <Resource Include="Assets\ClonarDCLogo.png" />
+    <Resource Include="Assets\ClonarDC.ico" />
+  </ItemGroup>
 </Project>
