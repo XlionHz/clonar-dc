@@ -1,0 +1,110 @@
+name: Build Clonar DC Windows
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Reconstruct source bundle
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $parts = Get-ChildItem -Path bootstrap -Filter 'part-*.txt' | Sort-Object Name
+          if (-not $parts) { throw 'Nenhum bootstrap/part-*.txt encontrado.' }
+          $b64 = ($parts | ForEach-Object { Get-Content $_.FullName -Raw }) -join ''
+          $bytes = [Convert]::FromBase64String(($b64 -replace '\s',''))
+          [IO.File]::WriteAllBytes((Join-Path $PWD 'project.zip'), $bytes)
+          New-Item -ItemType Directory -Force -Path extracted | Out-Null
+          Expand-Archive -Path project.zip -DestinationPath extracted -Force
+          Write-Host "Arquivos extraidos: $((Get-ChildItem extracted -Recurse -File).Count)"
+
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Locate solution
+        id: locate
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $sln = Get-ChildItem extracted -Recurse -Filter *.sln | Select-Object -First 1
+          if (-not $sln) { throw 'Nenhuma solution .sln encontrada no bundle.' }
+          "sln=$($sln.FullName)" >> $env:GITHUB_OUTPUT
+          $projects = Get-ChildItem extracted -Recurse -Filter *.csproj
+          $desktop = $projects | Where-Object { $_.Name -match 'Desktop|Client|App' -and $_.Name -notmatch 'Test' } | Select-Object -First 1
+          if (-not $desktop) { $desktop = $projects | Where-Object { $_.Name -notmatch 'Test|Server|Backend' } | Select-Object -First 1 }
+          if (-not $desktop) { throw 'Projeto desktop nao encontrado.' }
+          "desktop=$($desktop.FullName)" >> $env:GITHUB_OUTPUT
+          Write-Host "Solution: $($sln.FullName)"
+          Write-Host "Desktop: $($desktop.FullName)"
+
+      - name: Restore
+        shell: pwsh
+        run: dotnet restore "${{ steps.locate.outputs.sln }}"
+
+      - name: Build
+        shell: pwsh
+        run: dotnet build "${{ steps.locate.outputs.sln }}" -c Release --no-restore
+
+      - name: Test
+        shell: pwsh
+        run: dotnet test "${{ steps.locate.outputs.sln }}" -c Release --no-build --logger "trx;LogFileName=tests.trx"
+
+      - name: Publish self-contained Windows x64
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path out/app | Out-Null
+          dotnet publish "${{ steps.locate.outputs.desktop }}" -c Release -r win-x64 --self-contained true -o out/app
+          $exe = Get-ChildItem out/app -Filter *.exe | Where-Object { $_.Name -notmatch 'crash|host' } | Select-Object -First 1
+          if (-not $exe) { throw 'Executavel desktop nao encontrado apos publish.' }
+          $exe.Name | Set-Content out/desktop-exe.txt
+          Write-Host "Desktop exe: $($exe.Name)"
+
+      - name: Install Velopack CLI
+        shell: pwsh
+        run: dotnet tool install -g vpk --version 1.2.0
+
+      - name: Build Setup.exe
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $exe = (Get-Content out/desktop-exe.txt -Raw).Trim()
+          New-Item -ItemType Directory -Force -Path out/releases | Out-Null
+          vpk pack -u ClonarDC -v 0.3.0 -p out/app -e $exe --packTitle "Clonar DC" -o out/releases
+          $setup = Get-ChildItem out/releases -Recurse -Filter *Setup*.exe | Select-Object -First 1
+          if (-not $setup) { throw 'Setup.exe nao foi gerado.' }
+          Copy-Item $setup.FullName out/Clonar-DC-Setup.exe -Force
+          Get-FileHash out/Clonar-DC-Setup.exe -Algorithm SHA256 | Format-List | Out-File out/SHA256.txt
+
+      - name: Upload installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: Clonar-DC-Windows-Installer
+          path: |
+            out/Clonar-DC-Setup.exe
+            out/SHA256.txt
+            out/releases/**
+          if-no-files-found: error
+
+      - name: Upload diagnostics on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Clonar-DC-Build-Diagnostics
+          path: |
+            **/*.trx
+            out/**
+          if-no-files-found: ignore
