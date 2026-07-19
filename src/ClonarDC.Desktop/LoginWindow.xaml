@@ -11,27 +11,27 @@
                     <Image Source="/ClonarDC;component/Assets/ClonarDCLogo.png" Width="150" Height="150" HorizontalAlignment="Left" Margin="0,0,0,26"/>
                     <TextBlock Text="Clonar DC" FontSize="42" FontWeight="Bold"/>
                     <TextBlock Text="CLONE  •  SYNC  •  EVOLVE" FontSize="13" FontWeight="SemiBold" Foreground="#60A5FA" Margin="0,12,0,0"/>
-                    <TextBlock Text="Estruturas de servidores, organizadas com precisão." FontSize="18" Foreground="{StaticResource MutedBrush}" Margin="0,18,0,0" TextWrapping="Wrap" MaxWidth="390"/>
+                    <TextBlock Text="Server structures, organized with precision." FontSize="18" Foreground="{StaticResource MutedBrush}" Margin="0,18,0,0" TextWrapping="Wrap" MaxWidth="390"/>
                 </StackPanel>
                 <TextBlock Text="CLONAR DC" VerticalAlignment="Bottom" HorizontalAlignment="Left" Foreground="#444A63" FontSize="10" FontWeight="SemiBold"/>
             </Grid>
         </Border>
         <Border Grid.Column="1" Background="{StaticResource PanelBrush}" Padding="54">
             <StackPanel VerticalAlignment="Center">
-                <TextBlock Text="Entrar" FontSize="28" FontWeight="Bold"/>
-                <TextBlock Text="Acesse sua conta Clonar DC" Foreground="{StaticResource MutedBrush}" Margin="0,6,0,24"/>
-                <TextBlock Text="E-mail" Margin="0,0,0,6"/>
+                <TextBlock Text="Sign in" FontSize="28" FontWeight="Bold"/>
+                <TextBlock Text="Access your Clonar DC account" Foreground="{StaticResource MutedBrush}" Margin="0,6,0,24"/>
+                <TextBlock Text="Email" Margin="0,0,0,6"/>
                 <TextBox x:Name="EmailBox" Height="42"/>
-                <TextBlock Text="Senha" Margin="0,16,0,6"/>
+                <TextBlock Text="Password" Margin="0,16,0,6"/>
                 <PasswordBox x:Name="PasswordBox" Height="42"/>
-                <Button x:Name="LoginButton" Style="{StaticResource PrimaryButton}" Content="Entrar" Height="44" Margin="0,22,0,0" Click="LoginButton_Click"/>
-                <Button Content="Criar conta" Height="42" Margin="0,10,0,0" Click="RegisterButton_Click"/>
+                <Button x:Name="LoginButton" Style="{StaticResource PrimaryButton}" Content="Sign in" Height="44" Margin="0,22,0,0" Click="LoginButton_Click"/>
+                <Button Content="Create account" Height="42" Margin="0,10,0,0" Click="RegisterButton_Click"/>
                 <TextBlock x:Name="StatusText" Foreground="{StaticResource MutedBrush}" TextWrapping="Wrap" Margin="0,18,0,0"/>
                 <Border x:Name="PendingBox" Visibility="Collapsed" Background="#211936" BorderBrush="#6D28D9" BorderThickness="1" CornerRadius="10" Padding="15" Margin="0,18,0,0">
                     <StackPanel>
-                        <TextBlock Text="Esperando autorização" FontWeight="Bold" FontSize="16"/>
-                        <TextBlock Text="Status: Pendente" Foreground="#C4B5FD" Margin="0,5,0,0"/>
-                        <TextBlock Text="Qualquer dúvida, abra um ticket em Dúvidas no Discord." Foreground="{StaticResource MutedBrush}" TextWrapping="Wrap" Margin="0,6,0,0"/>
+                        <TextBlock Text="Waiting for approval" FontWeight="Bold" FontSize="16"/>
+                        <TextBlock Text="Status: Pending" Foreground="#C4B5FD" Margin="0,5,0,0"/>
+                        <TextBlock Text="Questions? Open a ticket in the Questions channel on Discord." Foreground="{StaticResource MutedBrush}" TextWrapping="Wrap" Margin="0,6,0,0"/>
                     </StackPanel>
                 </Border>
             </StackPanel>
