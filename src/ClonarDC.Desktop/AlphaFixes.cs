@@ -2,6 +2,7 @@ using System.Reflection;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
+using ClonarDC.Services;
 
 namespace ClonarDC;
 
@@ -14,7 +15,6 @@ public partial class MainWindow
         var version = Assembly.GetExecutingAssembly().GetName().Version ?? new Version(0, 0, 0, 0);
         VersionText.Text = $"v{version.Major}.{version.Minor}.{version.Build} alpha {version.Revision}";
 
-        // Hide only the visual tab headers while preserving the selected content presenter.
         foreach (var item in Pages.Items.OfType<TabItem>())
         {
             item.Visibility = Visibility.Visible;
@@ -26,6 +26,7 @@ public partial class MainWindow
 
         FixLicenseSelectorContrast();
         InitializeUpdateUi();
+        LocalizationService.Apply(this);
         Pages.SelectedIndex = 0;
     }
 
