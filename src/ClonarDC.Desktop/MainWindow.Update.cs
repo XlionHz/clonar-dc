@@ -18,7 +18,7 @@ public partial class MainWindow
         if (_checkUpdatesButton is not null) return;
 
         var settingsTab = Pages.Items.OfType<TabItem>()
-            .FirstOrDefault(item => string.Equals(item.Header?.ToString(), "Configurações", StringComparison.Ordinal));
+            .FirstOrDefault(item => string.Equals(item.Header?.ToString(), "Settings", StringComparison.Ordinal));
         if (settingsTab?.Content is not StackPanel settingsPanel) return;
 
         var card = new Border
@@ -34,13 +34,13 @@ public partial class MainWindow
         var content = new StackPanel();
         content.Children.Add(new TextBlock
         {
-            Text = "Atualizações",
+            Text = LocalizationService.T("Updates"),
             FontSize = 18,
             FontWeight = FontWeights.Bold
         });
         content.Children.Add(new TextBlock
         {
-            Text = "O Clonar DC verifica novas versões, baixa o instalador e confere o SHA-256 antes de atualizar.",
+            Text = LocalizationService.T("The app checks for new versions automatically."),
             Foreground = (Brush)FindResource("MutedBrush"),
             TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(0, 7, 0, 14)
@@ -48,7 +48,7 @@ public partial class MainWindow
 
         _checkUpdatesButton = new Button
         {
-            Content = "Verificar atualizações",
+            Content = LocalizationService.T("Check for updates"),
             Width = 230,
             HorizontalAlignment = HorizontalAlignment.Left,
             Style = (Style)FindResource("PrimaryButton")
@@ -58,7 +58,7 @@ public partial class MainWindow
 
         _updateStatusText = new TextBlock
         {
-            Text = "A verificação automática será realizada após o login.",
+            Text = LocalizationService.T("No update check has run yet."),
             Foreground = (Brush)FindResource("MutedBrush"),
             TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(0, 12, 0, 0)
@@ -89,23 +89,23 @@ public partial class MainWindow
 
         _updateCts = new CancellationTokenSource();
         _checkUpdatesButton.IsEnabled = false;
-        _updateStatusText.Text = "Verificando atualizações…";
+        _updateStatusText.Text = "Checking for updates…";
 
         try
         {
             var update = await _updateService.CheckAsync(_updateCts.Token);
             if (update is null)
             {
-                _updateStatusText.Text = $"Versão atual: {_updateService.CurrentVersion}. Nenhuma atualização disponível.";
+                _updateStatusText.Text = $"Current version: {_updateService.CurrentVersion}. No updates are available.";
                 if (showCurrentMessage)
-                    MessageBox.Show("Você já está usando a versão mais recente.", "Clonar DC", MessageBoxButton.OK, MessageBoxImage.Information);
+                    MessageBox.Show("You are already using the latest version.", "Clonar DC", MessageBoxButton.OK, MessageBoxImage.Information);
                 return;
             }
 
-            _updateStatusText.Text = $"Nova versão disponível: {update.Tag}.";
+            _updateStatusText.Text = $"New version available: {update.Tag}.";
             var answer = MessageBox.Show(
-                $"A versão {update.Tag} está disponível.\n\nO Clonar DC pode baixar, verificar e instalar a atualização automaticamente. O aplicativo será fechado durante a instalação.\n\nAtualizar agora?",
-                "Atualização disponível",
+                $"Version {update.Tag} is available.\n\nClonar DC can download, verify, and install it automatically. The app will close during installation.\n\nUpdate now?",
+                "Update available",
                 MessageBoxButton.YesNo,
                 MessageBoxImage.Information);
 
@@ -113,23 +113,23 @@ public partial class MainWindow
 
             var progress = new Progress<int>(percent =>
             {
-                _updateStatusText.Text = $"Baixando atualização… {percent}%";
+                _updateStatusText.Text = $"Downloading update… {percent}%";
             });
 
             var setupPath = await _updateService.DownloadAndVerifyAsync(update, progress, _updateCts.Token);
-            _updateStatusText.Text = "Download concluído e integridade verificada. Instalando…";
+            _updateStatusText.Text = "Download complete and integrity verified. Installing…";
             UpdateService.LaunchInstaller(setupPath);
             Application.Current.Shutdown();
         }
         catch (OperationCanceledException)
         {
-            _updateStatusText.Text = "Verificação de atualização cancelada.";
+            _updateStatusText.Text = "Update check canceled.";
         }
         catch (Exception ex)
         {
-            _updateStatusText.Text = "Não foi possível atualizar: " + ex.Message;
+            _updateStatusText.Text = "Unable to update: " + ex.Message;
             if (showCurrentMessage)
-                MessageBox.Show(_updateStatusText.Text, "Atualizações", MessageBoxButton.OK, MessageBoxImage.Warning);
+                MessageBox.Show(_updateStatusText.Text, LocalizationService.T("Updates"), MessageBoxButton.OK, MessageBoxImage.Warning);
         }
         finally
         {
