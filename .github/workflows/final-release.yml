@@ -10,6 +10,10 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: clonar-dc-release
+  cancel-in-progress: true
+
 jobs:
   build-release:
     runs-on: windows-latest
@@ -127,7 +131,7 @@ jobs:
         run: |
           $ErrorActionPreference = 'Stop'
           $setup = "$PWD\out\installer\Clonar-DC-Setup.exe"
-          $install = Start-Process -FilePath $setup -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/SP-','/LANG=en-US' -Wait -PassThru
+          $install = Start-Process -FilePath $setup -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/SP-','/LANG=en' -Wait -PassThru
           if ($install.ExitCode -ne 0) { throw "Instalador retornou código $($install.ExitCode)." }
           $root = Join-Path $env:LOCALAPPDATA 'Programs\Clonar DC'
           $exe = Join-Path $root 'ClonarDC.exe'
@@ -198,7 +202,7 @@ jobs:
           # Última build verificada
 
           Status: **FALHA**
-          Commit de origem: `${{ github.sha }}`
+          Commit de origem: `${{ github.sha }}
           Workflow run: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
           "@ | Set-Content build-status/latest.md -Encoding UTF8
           git config user.name 'github-actions[bot]'
