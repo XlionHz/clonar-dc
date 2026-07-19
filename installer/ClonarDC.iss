@@ -29,35 +29,35 @@ LanguageDetectionMethod=none
 UsePreviousLanguage=yes
 
 [Languages]
-Name: "en-US"; MessagesFile: "compiler:Default.isl"
-Name: "pt-BR"; MessagesFile: "compiler:Languages\BrazilianPortuguese.isl"
-Name: "es-ES"; MessagesFile: "compiler:Languages\Spanish.isl"
-Name: "fr-FR"; MessagesFile: "compiler:Languages\French.isl"
-Name: "de-DE"; MessagesFile: "compiler:Languages\German.isl"
+Name: "en"; MessagesFile: "compiler:Default.isl"
+Name: "ptbr"; MessagesFile: "compiler:Languages\BrazilianPortuguese.isl"
+Name: "es"; MessagesFile: "compiler:Languages\Spanish.isl"
+Name: "fr"; MessagesFile: "compiler:Languages\French.isl"
+Name: "de"; MessagesFile: "compiler:Languages\German.isl"
 
 [CustomMessages]
-en-US.DesktopShortcut=Create a desktop shortcut
-en-US.ShortcutsGroup=Shortcuts:
-en-US.OpenApp=Open Clonar DC
-pt-BR.DesktopShortcut=Criar atalho na Área de Trabalho
-pt-BR.ShortcutsGroup=Atalhos:
-pt-BR.OpenApp=Abrir Clonar DC
-es-ES.DesktopShortcut=Crear un acceso directo en el escritorio
-es-ES.ShortcutsGroup=Accesos directos:
-es-ES.OpenApp=Abrir Clonar DC
-fr-FR.DesktopShortcut=Créer un raccourci sur le Bureau
-fr-FR.ShortcutsGroup=Raccourcis :
-fr-FR.OpenApp=Ouvrir Clonar DC
-de-DE.DesktopShortcut=Desktop-Verknüpfung erstellen
-de-DE.ShortcutsGroup=Verknüpfungen:
-de-DE.OpenApp=Clonar DC öffnen
+en.DesktopShortcut=Create a desktop shortcut
+en.ShortcutsGroup=Shortcuts:
+en.OpenApp=Open Clonar DC
+ptbr.DesktopShortcut=Criar atalho na Área de Trabalho
+ptbr.ShortcutsGroup=Atalhos:
+ptbr.OpenApp=Abrir Clonar DC
+es.DesktopShortcut=Crear un acceso directo en el escritorio
+es.ShortcutsGroup=Accesos directos:
+es.OpenApp=Abrir Clonar DC
+fr.DesktopShortcut=Créer un raccourci sur le Bureau
+fr.ShortcutsGroup=Raccourcis :
+fr.OpenApp=Ouvrir Clonar DC
+de.DesktopShortcut=Desktop-Verknüpfung erstellen
+de.ShortcutsGroup=Verknüpfungen:
+de.OpenApp=Clonar DC öffnen
 
 [Files]
 Source: "..\out\app\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "..\out\backend\*"; DestDir: "{app}\backend"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Registry]
-Root: HKCU; Subkey: "Software\Clonar DC"; ValueType: string; ValueName: "Language"; ValueData: "{language}"
+Root: HKCU; Subkey: "Software\Clonar DC"; ValueType: string; ValueName: "Language"; ValueData: "{code:GetAppCulture}"
 
 [Icons]
 Name: "{autoprograms}\Clonar DC"; Filename: "{app}\{#MyAppExeName}"; IconFilename: "{app}\{#MyAppExeName}"
@@ -68,3 +68,21 @@ Name: "desktopicon"; Description: "{cm:DesktopShortcut}"; GroupDescription: "{cm
 
 [Run]
 Filename: "{app}\{#MyAppExeName}"; Description: "{cm:OpenApp}"; Flags: nowait postinstall skipifsilent
+
+[Code]
+function GetAppCulture(Param: string): string;
+var
+  Selected: string;
+begin
+  Selected := ActiveLanguage;
+  if Selected = 'ptbr' then
+    Result := 'pt-BR'
+  else if Selected = 'es' then
+    Result := 'es-ES'
+  else if Selected = 'fr' then
+    Result := 'fr-FR'
+  else if Selected = 'de' then
+    Result := 'de-DE'
+  else
+    Result := 'en-US';
+end;
