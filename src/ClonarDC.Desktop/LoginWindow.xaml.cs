@@ -11,6 +11,7 @@ public partial class LoginWindow : Window
     public LoginWindow()
     {
         InitializeComponent();
+        LocalizationService.Apply(this);
     }
 
     private async void LoginButton_Click(object sender, RoutedEventArgs e)
@@ -21,7 +22,7 @@ public partial class LoginWindow : Window
 
         if (string.IsNullOrWhiteSpace(email) || string.IsNullOrWhiteSpace(password))
         {
-            StatusText.Text = "Informe o e-mail e a senha.";
+            StatusText.Text = LocalizationService.T("Enter your email and password.");
             return;
         }
 
@@ -29,27 +30,27 @@ public partial class LoginWindow : Window
         var isDeveloper = DeveloperAccess.Verify(email, password);
         if (isDeveloperEmail && !isDeveloper)
         {
-            StatusText.Text = "E-mail ou senha incorretos.";
+            StatusText.Text = LocalizationService.T("Email or password is incorrect.");
             PasswordBox.Clear();
             return;
         }
 
-        SetBusy(true, isDeveloper ? "Abrindo modo de desenvolvimento…" : "Entrando…");
+        SetBusy(true, LocalizationService.T(isDeveloper ? "Opening developer mode…" : "Signing in…"));
         try
         {
             var session = await _auth.LoginAsync(email, password, bootstrapDeveloper: isDeveloper);
             if (isDeveloper && !session.IsAdmin)
-                throw new InvalidOperationException("A conta principal não recebeu autorização administrativa.");
+                throw new InvalidOperationException("The main account did not receive administrator authorization.");
 
             if (session.License.Status is "pending" or "none")
             {
                 PendingBox.Visibility = Visibility.Visible;
-                StatusText.Text = "Sua conta existe, mas ainda não possui uma licença ativa.";
+                StatusText.Text = LocalizationService.T("Your account exists, but it does not have an active license yet.");
                 return;
             }
             if (session.License.Status is "suspended" or "revoked" or "expired")
             {
-                StatusText.Text = $"Acesso indisponível: {session.License.Status}.";
+                StatusText.Text = $"Access unavailable: {session.License.Status}.";
                 return;
             }
 
@@ -59,7 +60,7 @@ public partial class LoginWindow : Window
         }
         catch (Exception ex)
         {
-            StatusText.Text = "Não foi possível entrar. " + ex.Message;
+            StatusText.Text = "Unable to sign in. " + ex.Message;
             if (ex.Message.Contains("pend", StringComparison.OrdinalIgnoreCase)) PendingBox.Visibility = Visibility.Visible;
         }
         finally
@@ -76,7 +77,7 @@ public partial class LoginWindow : Window
         {
             EmailBox.Text = dialog.RegisteredEmail;
             PendingBox.Visibility = Visibility.Visible;
-            StatusText.Text = "Conta criada com sucesso. Agora ela está esperando autorização.";
+            StatusText.Text = LocalizationService.T("Account created successfully. It is now waiting for approval.");
         }
     }
 
