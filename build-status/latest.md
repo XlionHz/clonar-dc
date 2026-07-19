@@ -1,10 +1,10 @@
 # Última build verificada
 
 Status: **SUCESSO**
-Versão: $env:APP_VERSION-alpha.15
-Commit de origem: 37a7132613d1047d2b179bf70e9af2f22a0563f
-Workflow run: https://github.com/XlionHz/clonar-dc/actions/runs/29665134161
-Release: https://github.com/XlionHz/clonar-dc/releases/tag/v0.4.1-alpha.15
+Versão: $env:APP_VERSION-alpha.31
+Commit de origem: 55191cde08276fef11a3d8b219c3dbe0b912519c
+Workflow run: https://github.com/XlionHz/clonar-dc/actions/runs/29666812668
+Release: https://github.com/XlionHz/clonar-dc/releases/tag/v0.5.0-alpha.31
 SHA-256: $hash
 
-Validação: desktop e backend compilados, cadastro e login testados, instalador criado e aplicativo instalado iniciado.
+Validação: desktop e backend compilados, cadastro e login testados, instalador multilíngue criado, idioma en-US persistido e aplicativo instalado iniciado.
