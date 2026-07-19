@@ -25,9 +25,10 @@ public partial class MainWindow : Window
     {
         _session = session;
         InitializeComponent();
+        LocalizationService.Apply(this);
         UserNameText.Text = session.DisplayName;
         UserEmailText.Text = session.Email;
-        VersionText.Text = "v0.3.0 alpha";
+        VersionText.Text = "v0.5.0 alpha";
         AdminNav.Visibility = session.IsAdmin ? Visibility.Visible : Visibility.Collapsed;
         LogList.ItemsSource = _logs;
         OperationsList.ItemsSource = _operations;
@@ -62,18 +63,22 @@ public partial class MainWindow : Window
         try
         {
             SetDiscordToken();
-            AddLog("info", "Validando Token…");
+            AddLog("info", "Validating Token…");
             var bot = await _discord.ValidateTokenAsync();
-            AddLog("success", $"Token válido. Bot: {bot}");
+            AddLog("success", $"Token is valid. Bot: {bot}");
             if (RememberTokenCheck.IsChecked == true) _secureToken.Save(TokenBox.Password);
             var guilds = await _discord.GetGuildsAsync();
             SourceGuildBox.ItemsSource = guilds;
             TargetGuildBox.ItemsSource = guilds.ToList();
             if (guilds.Count > 0) SourceGuildBox.SelectedIndex = 0;
             if (guilds.Count > 1) TargetGuildBox.SelectedIndex = 1;
-            AddLog("info", $"{guilds.Count} servidor(es) acessíveis pelo bot.");
+            AddLog("info", $"The bot can access {guilds.Count} server(s).");
         }
-        catch (Exception ex) { AddLog("error", ex.Message); MessageBox.Show(ex.Message, "Clonar DC", MessageBoxButton.OK, MessageBoxImage.Warning); }
+        catch (Exception ex)
+        {
+            AddLog("error", ex.Message);
+            MessageBox.Show(ex.Message, "Clonar DC", MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
     }
 
     private async void Analyze_Click(object sender, RoutedEventArgs e)
@@ -81,30 +86,40 @@ public partial class MainWindow : Window
         try
         {
             SetDiscordToken();
-            var source = RequireGuild(SourceGuildBox, "servidor original");
-            var target = RequireGuild(TargetGuildBox, "servidor de destino");
-            if (source.Id == target.Id) throw new InvalidOperationException("O servidor original e o destino não podem ser iguais.");
+            var source = RequireGuild(SourceGuildBox, "source server");
+            var target = RequireGuild(TargetGuildBox, "destination server");
+            if (source.Id == target.Id) throw new InvalidOperationException("The source and destination servers cannot be the same.");
             var mode = SelectedMode();
             CloneButton.IsEnabled = false;
-            PlanText.Text = "Analisando estrutura e diferenças…";
-            AddLog("info", $"Analisando {source.Name} → {target.Name}…");
+            PlanText.Text = "Analyzing structure and differences…";
+            AddLog("info", $"Analyzing {source.Name} → {target.Name}…");
             _currentPlan = await _discord.AnalyzeAsync(source.Id, target.Id, mode);
             _currentSourceSnapshot = await _discord.CaptureAsync(source.Id, MakeProgress());
             PlanText.Text = BuildPlanText(_currentPlan);
             CloneButton.IsEnabled = true;
-            AddLog("success", "Plano gerado. Revise antes de executar.");
+            AddLog("success", "Plan generated. Review it before running the operation.");
         }
-        catch (Exception ex) { PlanText.Text = ex.Message; AddLog("error", ex.Message); }
+        catch (Exception ex)
+        {
+            PlanText.Text = ex.Message;
+            AddLog("error", ex.Message);
+        }
     }
 
     private async void Clone_Click(object sender, RoutedEventArgs e)
     {
-        if (_currentPlan is null || _currentSourceSnapshot is null) { MessageBox.Show("Faça uma análise antes de clonar."); return; }
-        var target = RequireGuild(TargetGuildBox, "servidor de destino");
+        if (_currentPlan is null || _currentSourceSnapshot is null)
+        {
+            MessageBox.Show("Run an analysis before cloning.");
+            return;
+        }
+
+        var target = RequireGuild(TargetGuildBox, "destination server");
         var warning = _currentPlan.IsDestructive
-            ? "O modo EXATO pode remover canais e cargos existentes do destino. Um backup será criado antes. Digite o nome do servidor de destino na confirmação seguinte."
-            : "A operação criará itens no servidor de destino. Revise o plano antes de continuar.";
-        if (MessageBox.Show(warning, "Confirmar clonagem", MessageBoxButton.OKCancel, MessageBoxImage.Warning) != MessageBoxResult.OK) return;
+            ? "EXACT mode can remove existing channels and roles from the destination. A backup will be created first. In the next confirmation, enter the destination server name."
+            : "The operation will create items on the destination server. Review the plan before continuing.";
+
+        if (MessageBox.Show(warning, "Confirm cloning", MessageBoxButton.OKCancel, MessageBoxImage.Warning) != MessageBoxResult.OK) return;
         if (_currentPlan.IsDestructive)
         {
             var confirm = new TextConfirmWindow(target.Name) { Owner = this };
@@ -116,21 +131,33 @@ public partial class MainWindow : Window
         {
             if (AutoBackupCheck.IsChecked == true || _currentPlan.IsDestructive)
             {
-                AddLog("info", "Criando backup automático do destino…");
+                AddLog("info", "Creating an automatic backup of the destination…");
                 var targetSnapshot = await _discord.CaptureAsync(target.Id, MakeProgress());
-                var path = await _backups.SaveAsync(targetSnapshot, $"Antes de clonar — {target.Name}", "Backup automático de segurança", ["automatico", "pre-clone"]);
-                AddLog("success", "Backup salvo: " + Path.GetFileName(path));
+                var path = await _backups.SaveAsync(targetSnapshot, $"Before cloning — {target.Name}", "Automatic safety backup", ["automatic", "pre-clone"]);
+                AddLog("success", "Backup saved: " + Path.GetFileName(path));
                 RefreshBackups();
             }
-            AddOperation($"Clonagem iniciada: {_currentSourceSnapshot.Name} → {target.Name}");
+
+            AddOperation($"Cloning started: {_currentSourceSnapshot.Name} → {target.Name}");
             await _discord.ExecuteCloneAsync(_currentSourceSnapshot, target.Id, _currentPlan.Mode, MakeProgress());
-            AddOperation($"Clonagem concluída: {_currentSourceSnapshot.Name} → {target.Name}");
-            DashboardLastOperation.Text = $"Clonagem → {target.Name}";
-            MessageBox.Show("Operação concluída. Recomendamos executar uma nova análise para validar o resultado.", "Clonar DC", MessageBoxButton.OK, MessageBoxImage.Information);
+            AddOperation($"Cloning completed: {_currentSourceSnapshot.Name} → {target.Name}");
+            DashboardLastOperation.Text = $"Cloning → {target.Name}";
+            MessageBox.Show("Operation completed. Run another analysis to validate the result.", "Clonar DC", MessageBoxButton.OK, MessageBoxImage.Information);
         }
-        catch (OperationCanceledException) { AddLog("warning", "Operação cancelada."); }
-        catch (Exception ex) { AddLog("error", ex.Message); AddOperation("Falha: " + ex.Message); MessageBox.Show(ex.Message, "Falha na clonagem", MessageBoxButton.OK, MessageBoxImage.Error); }
-        finally { CloneButton.IsEnabled = true; }
+        catch (OperationCanceledException)
+        {
+            AddLog("warning", "Operation canceled.");
+        }
+        catch (Exception ex)
+        {
+            AddLog("error", ex.Message);
+            AddOperation("Failure: " + ex.Message);
+            MessageBox.Show(ex.Message, "Cloning failed", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+        finally
+        {
+            CloneButton.IsEnabled = true;
+        }
     }
 
     private void RefreshBackups_Click(object sender, RoutedEventArgs e) => RefreshBackups();
@@ -138,20 +165,35 @@ public partial class MainWindow : Window
 
     private async void BackupList_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        if (BackupList.SelectedIndex < 0 || BackupList.SelectedIndex >= _backupPaths.Count) { BackupDetails.Text = "Selecione um backup."; return; }
+        if (BackupList.SelectedIndex < 0 || BackupList.SelectedIndex >= _backupPaths.Count)
+        {
+            BackupDetails.Text = "Select a backup.";
+            return;
+        }
+
         try
         {
             var env = await _backups.LoadAsync(_backupPaths[BackupList.SelectedIndex]);
-            BackupDetails.Text = $"{env.Name}\nServidor: {env.Snapshot.Name}\nCriado: {env.Snapshot.CreatedAt.LocalDateTime:g}\nCargos: {env.Snapshot.Roles.Count}\nCanais: {env.Snapshot.Channels.Count}\nEmojis: {env.Snapshot.Emojis.Count}\nIntegridade: válida";
+            BackupDetails.Text = $"{env.Name}\nServer: {env.Snapshot.Name}\nCreated: {env.Snapshot.CreatedAt.LocalDateTime:g}\nRoles: {env.Snapshot.Roles.Count}\nChannels: {env.Snapshot.Channels.Count}\nEmojis: {env.Snapshot.Emojis.Count}\nIntegrity: valid";
         }
-        catch (Exception ex) { BackupDetails.Text = "Falha: " + ex.Message; }
+        catch (Exception ex)
+        {
+            BackupDetails.Text = "Failure: " + ex.Message;
+        }
     }
 
     private async void VerifyBackup_Click(object sender, RoutedEventArgs e)
     {
         if (BackupList.SelectedIndex < 0 || BackupList.SelectedIndex >= _backupPaths.Count) return;
-        try { var env = await _backups.LoadAsync(_backupPaths[BackupList.SelectedIndex]); MessageBox.Show($"Backup '{env.Name}' íntegro.", "Clonar DC", MessageBoxButton.OK, MessageBoxImage.Information); }
-        catch (Exception ex) { MessageBox.Show(ex.Message, "Backup inválido", MessageBoxButton.OK, MessageBoxImage.Error); }
+        try
+        {
+            var env = await _backups.LoadAsync(_backupPaths[BackupList.SelectedIndex]);
+            MessageBox.Show($"Backup '{env.Name}' is valid.", "Clonar DC", MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(ex.Message, "Invalid backup", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
     }
 
     private async void RestoreBackup_Click(object sender, RoutedEventArgs e)
@@ -160,24 +202,31 @@ public partial class MainWindow : Window
         try
         {
             SetDiscordToken();
-            var target = RequireGuild(TargetGuildBox, "servidor de destino na tela Clonagem");
+            var target = RequireGuild(TargetGuildBox, "destination server on the Cloning screen");
             var env = await _backups.LoadAsync(_backupPaths[BackupList.SelectedIndex]);
-            if (MessageBox.Show($"Restaurar '{env.Name}' em {target.Name}? Um backup preventivo será criado primeiro.", "Restaurar backup", MessageBoxButton.OKCancel, MessageBoxImage.Warning) != MessageBoxResult.OK) return;
+            if (MessageBox.Show($"Restore '{env.Name}' to {target.Name}? A preventive backup will be created first.", "Restore backup", MessageBoxButton.OKCancel, MessageBoxImage.Warning) != MessageBoxResult.OK) return;
             var before = await _discord.CaptureAsync(target.Id, MakeProgress());
-            await _backups.SaveAsync(before, $"Antes de restaurar — {target.Name}", "Backup preventivo", ["automatico", "pre-restore"]);
+            await _backups.SaveAsync(before, $"Before restoring — {target.Name}", "Preventive backup", ["automatic", "pre-restore"]);
             await _discord.ExecuteCloneAsync(env.Snapshot, target.Id, "exact", MakeProgress());
-            AddOperation($"Backup restaurado em {target.Name}: {env.Name}");
-            MessageBox.Show("Restauração concluída.");
+            AddOperation($"Backup restored to {target.Name}: {env.Name}");
+            MessageBox.Show("Restore completed.");
         }
-        catch (Exception ex) { AddLog("error", ex.Message); MessageBox.Show(ex.Message, "Falha na restauração", MessageBoxButton.OK, MessageBoxImage.Error); }
+        catch (Exception ex)
+        {
+            AddLog("error", ex.Message);
+            MessageBox.Show(ex.Message, "Restore failed", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
     }
 
     private void ClearToken_Click(object sender, RoutedEventArgs e)
     {
-        _secureToken.Clear(); TokenBox.Password = ""; MessageBox.Show("Token salvo removido deste computador.");
+        _secureToken.Clear();
+        TokenBox.Password = "";
+        MessageBox.Show("The saved Token was removed from this computer.");
     }
 
     private async void LoadAdmin_Click(object sender, RoutedEventArgs e) => await LoadAdminUsersAsync();
+
     private async Task LoadAdminUsersAsync()
     {
         if (!_session.IsAdmin) return;
@@ -186,8 +235,12 @@ public partial class MainWindow : Window
             _adminUsers = await _auth.GetUsersAsync(_session);
             AdminUsersList.ItemsSource = _adminUsers.Select(u => $"{u.Name}  •  {u.Email}  •  {u.Status}  •  {u.License}").ToList();
         }
-        catch (Exception ex) { AddOperation("Admin: " + ex.Message); }
+        catch (Exception ex)
+        {
+            AddOperation("Admin: " + ex.Message);
+        }
     }
+
     private void AdminUsersList_SelectionChanged(object sender, SelectionChangedEventArgs e) { }
     private async void ApproveUser_Click(object sender, RoutedEventArgs e) => await RunAdminAction("approve", SelectedLicense());
     private async void SuspendUser_Click(object sender, RoutedEventArgs e) => await RunAdminAction("suspend");
@@ -196,28 +249,45 @@ public partial class MainWindow : Window
 
     private async Task RunAdminAction(string action, string? license = null)
     {
-        if (AdminUsersList.SelectedIndex < 0 || AdminUsersList.SelectedIndex >= _adminUsers.Count) { MessageBox.Show("Selecione um usuário."); return; }
-        try { await _auth.AdminActionAsync(_session, _adminUsers[AdminUsersList.SelectedIndex].Id, action, license); await LoadAdminUsersAsync(); }
-        catch (Exception ex) { MessageBox.Show(ex.Message, "Administração", MessageBoxButton.OK, MessageBoxImage.Error); }
+        if (AdminUsersList.SelectedIndex < 0 || AdminUsersList.SelectedIndex >= _adminUsers.Count)
+        {
+            MessageBox.Show("Select a user.");
+            return;
+        }
+
+        try
+        {
+            await _auth.AdminActionAsync(_session, _adminUsers[AdminUsersList.SelectedIndex].Id, action, license);
+            await LoadAdminUsersAsync();
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(ex.Message, "Administration", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
     }
 
     private void SetDiscordToken()
     {
-        if (string.IsNullOrWhiteSpace(TokenBox.Password)) throw new InvalidOperationException("Informe o Token.");
+        if (string.IsNullOrWhiteSpace(TokenBox.Password)) throw new InvalidOperationException("Enter the Token.");
         _discord.SetToken(TokenBox.Password);
         if (RememberTokenCheck.IsChecked == true) _secureToken.Save(TokenBox.Password);
     }
-    private static GuildSummary RequireGuild(ComboBox box, string name) => box.SelectedItem as GuildSummary ?? throw new InvalidOperationException($"Selecione o {name}.");
+
+    private static GuildSummary RequireGuild(ComboBox box, string name) =>
+        box.SelectedItem as GuildSummary ?? throw new InvalidOperationException($"Select the {name}.");
+
     private string SelectedMode() => (ModeBox.SelectedItem as ComboBoxItem)?.Tag?.ToString() ?? "safe";
     private string SelectedLicense() => (LicenseBox.SelectedItem as ComboBoxItem)?.Tag?.ToString() ?? "1m";
 
     private IProgress<OperationLog> MakeProgress() => new Progress<OperationLog>(l => AddLog(l.Level, l.Message));
+
     private void AddLog(string level, string message)
     {
         var prefix = level switch { "success" => "✓", "error" => "✕", "warning" => "!", _ => "•" };
         _logs.Insert(0, $"{DateTime.Now:HH:mm:ss}  {prefix}  {message}");
         while (_logs.Count > 400) _logs.RemoveAt(_logs.Count - 1);
     }
+
     private void AddOperation(string text)
     {
         _operations.Insert(0, $"{DateTime.Now:g}  —  {text}");
@@ -226,23 +296,31 @@ public partial class MainWindow : Window
 
     private void RefreshBackups()
     {
-        _backupPaths.Clear(); _backupItems.Clear();
-        foreach (var path in _backups.ListBackups()) { _backupPaths.Add(path); _backupItems.Add($"{Path.GetFileNameWithoutExtension(path)}\n{File.GetLastWriteTime(path):g}"); }
+        _backupPaths.Clear();
+        _backupItems.Clear();
+        foreach (var path in _backups.ListBackups())
+        {
+            _backupPaths.Add(path);
+            _backupItems.Add($"{Path.GetFileNameWithoutExtension(path)}\n{File.GetLastWriteTime(path):g}");
+        }
         RefreshDashboard();
     }
+
     private void RefreshDashboard()
     {
         DashboardLicense.Text = _session.License.Status;
         DashboardBackups.Text = _backups.ListBackups().Count.ToString();
     }
+
     private void UpdateLicenseText()
     {
-        var expiry = _session.License.ExpiresAt is null ? "Sem data de expiração" : _session.License.ExpiresAt.Value.LocalDateTime.ToString("f");
-        LicenseDetails.Text = $"Status: {_session.License.Status}\nExpiração: {expiry}\nLimite de dispositivos: {_session.License.DeviceLimit}\n\nAs validações de licença são feitas pelo backend; o cliente não decide sozinho se uma conta está autorizada.";
+        var expiry = _session.License.ExpiresAt is null ? "No expiration date" : _session.License.ExpiresAt.Value.LocalDateTime.ToString("f");
+        LicenseDetails.Text = $"Status: {_session.License.Status}\nExpiration: {expiry}\nDevice limit: {_session.License.DeviceLimit}\n\nLicense validation is performed by the backend; the client does not decide by itself whether an account is authorized.";
     }
+
     private static string BuildPlanText(ClonePlan p)
     {
-        var warnings = p.Warnings.Count == 0 ? "Nenhum alerta crítico detectado." : string.Join("\n• ", p.Warnings);
-        return $"Modo: {p.Mode}\nCargos a criar: {p.RolesToCreate}\nCanais a criar: {p.ChannelsToCreate}\nEmojis a processar: {p.EmojisToCreate}\nCargos a remover: {p.TargetRolesToDelete}\nCanais a remover: {p.TargetChannelsToDelete}\n\nAlertas:\n• {warnings}";
+        var warnings = p.Warnings.Count == 0 ? "No critical warnings detected." : string.Join("\n• ", p.Warnings);
+        return $"Mode: {p.Mode}\nRoles to create: {p.RolesToCreate}\nChannels to create: {p.ChannelsToCreate}\nEmojis to process: {p.EmojisToCreate}\nRoles to remove: {p.TargetRolesToDelete}\nChannels to remove: {p.TargetChannelsToDelete}\n\nWarnings:\n• {warnings}";
     }
 }
