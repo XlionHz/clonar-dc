@@ -1,18 +1,18 @@
 <Window x:Class="ClonarDC.RegisterWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Criar conta — Clonar DC" Icon="/ClonarDC;component/Assets/ClonarDC.ico"
+        Title="Create account — Clonar DC" Icon="/ClonarDC;component/Assets/ClonarDC.ico"
         Width="520" Height="650" WindowStartupLocation="CenterOwner" ResizeMode="NoResize">
     <Border Padding="42" Background="{StaticResource PanelBrush}">
         <StackPanel>
             <Image Source="/ClonarDC;component/Assets/ClonarDCLogo.png" Width="70" Height="70" HorizontalAlignment="Left" Margin="0,0,0,14"/>
-            <TextBlock Text="Criar conta" FontSize="28" FontWeight="Bold"/>
-            <TextBlock Text="Após o cadastro, a conta ficará aguardando aprovação do administrador." Foreground="{StaticResource MutedBrush}" Margin="0,6,0,24" TextWrapping="Wrap"/>
-            <TextBlock Text="Nome" Margin="0,0,0,6"/><TextBox x:Name="NameBox" Height="42"/>
-            <TextBlock Text="E-mail" Margin="0,14,0,6"/><TextBox x:Name="EmailBox" Height="42"/>
-            <TextBlock Text="Senha" Margin="0,14,0,6"/><PasswordBox x:Name="PasswordBox" Height="42"/>
-            <TextBlock Text="Repita a senha" Margin="0,14,0,6"/><PasswordBox x:Name="ConfirmBox" Height="42"/>
-            <Button x:Name="CreateButton" Style="{StaticResource PrimaryButton}" Content="Criar conta" Height="44" Margin="0,22,0,0" Click="CreateButton_Click"/>
+            <TextBlock Text="Create account" FontSize="28" FontWeight="Bold"/>
+            <TextBlock Text="After registration, the account will wait for administrator approval." Foreground="{StaticResource MutedBrush}" Margin="0,6,0,24" TextWrapping="Wrap"/>
+            <TextBlock Text="Name" Margin="0,0,0,6"/><TextBox x:Name="NameBox" Height="42"/>
+            <TextBlock Text="Email" Margin="0,14,0,6"/><TextBox x:Name="EmailBox" Height="42"/>
+            <TextBlock Text="Password" Margin="0,14,0,6"/><PasswordBox x:Name="PasswordBox" Height="42"/>
+            <TextBlock Text="Repeat password" Margin="0,14,0,6"/><PasswordBox x:Name="ConfirmBox" Height="42"/>
+            <Button x:Name="CreateButton" Style="{StaticResource PrimaryButton}" Content="Create account" Height="44" Margin="0,22,0,0" Click="CreateButton_Click"/>
             <TextBlock x:Name="StatusText" Foreground="{StaticResource MutedBrush}" TextWrapping="Wrap" Margin="0,16,0,0"/>
         </StackPanel>
     </Border>
