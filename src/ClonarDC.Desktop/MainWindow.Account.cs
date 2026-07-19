@@ -1,4 +1,5 @@
 using System.Windows;
+using ClonarDC.Services;
 
 namespace ClonarDC;
 
@@ -9,8 +10,8 @@ public partial class MainWindow
     private void Logout_Click(object sender, RoutedEventArgs e)
     {
         var result = MessageBox.Show(
-            "Deseja sair desta conta e voltar para a tela de login?",
-            "Sair da conta",
+            LocalizationService.T("Do you want to sign out and return to the login screen?"),
+            LocalizationService.T("Sign out of account"),
             MessageBoxButton.YesNo,
             MessageBoxImage.Question);
 
