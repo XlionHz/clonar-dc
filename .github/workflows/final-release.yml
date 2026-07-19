@@ -15,7 +15,7 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 60
     env:
-      APP_VERSION: '0.4.1'
+      APP_VERSION: '0.5.0'
 
     steps:
       - name: Checkout
@@ -127,18 +127,20 @@ jobs:
         run: |
           $ErrorActionPreference = 'Stop'
           $setup = "$PWD\out\installer\Clonar-DC-Setup.exe"
-          $install = Start-Process -FilePath $setup -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/SP-' -Wait -PassThru
+          $install = Start-Process -FilePath $setup -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/SP-','/LANG=en-US' -Wait -PassThru
           if ($install.ExitCode -ne 0) { throw "Instalador retornou código $($install.ExitCode)." }
           $root = Join-Path $env:LOCALAPPDATA 'Programs\Clonar DC'
           $exe = Join-Path $root 'ClonarDC.exe'
           $backend = Join-Path $root 'backend\ClonarDC.Server.exe'
           if (-not (Test-Path $exe)) { throw 'Executável instalado não encontrado.' }
           if (-not (Test-Path $backend)) { throw 'Backend instalado não encontrado.' }
+          $selectedLanguage = Get-ItemPropertyValue -Path 'HKCU:\Software\Clonar DC' -Name Language
+          if ($selectedLanguage -ne 'en-US') { throw "Idioma do instalador não foi persistido: $selectedLanguage" }
           $proc = Start-Process -FilePath $exe -PassThru
           Start-Sleep -Seconds 8
           if ($proc.HasExited) { throw "Aplicativo instalado encerrou prematuramente com código $($proc.ExitCode)." }
           Stop-Process -Id $proc.Id -Force
-          'Installer succeeded and installed app stayed alive.' | Set-Content out/installer/smoke-install.txt
+          'Installer succeeded, persisted en-US, and installed app stayed alive.' | Set-Content out/installer/smoke-install.txt
 
       - name: Upload verified build artifacts
         uses: actions/upload-artifact@v4
@@ -161,7 +163,7 @@ jobs:
           $ErrorActionPreference = 'Stop'
           $tag = "v$env:APP_VERSION-alpha.$env:GITHUB_RUN_NUMBER"
           $title = "Clonar DC $env:APP_VERSION Alpha $env:GITHUB_RUN_NUMBER"
-          $notes = 'Build verificada com correção visual do seletor de licenças e atualização automática com download e validação SHA-256.'
+          $notes = 'Multilingual build with English as the default language and optional Portuguese, Spanish, French, and German during installation.'
           gh release create $tag 'out/installer/Clonar-DC-Setup.exe' 'out/installer/Clonar-DC-Setup.sha256' 'out/installer/smoke-install.txt' 'out/smoke-runtime.txt' 'out/auth-smoke.txt' --title $title --notes $notes --target $env:GITHUB_SHA
 
       - name: Record successful build status
@@ -179,7 +181,7 @@ jobs:
           Release: https://github.com/${{ github.repository }}/releases/tag/v$env:APP_VERSION-alpha.${{ github.run_number }}
           SHA-256: `$hash`
 
-          Validação: desktop e backend compilados, cadastro e login testados, instalador criado e aplicativo instalado iniciado.
+          Validação: desktop e backend compilados, cadastro e login testados, instalador multilíngue criado, idioma en-US persistido e aplicativo instalado iniciado.
           "@ | Set-Content build-status/latest.md -Encoding UTF8
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
