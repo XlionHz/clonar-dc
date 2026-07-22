@@ -19,7 +19,7 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 60
     env:
-      APP_VERSION: '0.5.0'
+      APP_VERSION: '0.5.1'
 
     steps:
       - name: Checkout
@@ -67,7 +67,7 @@ jobs:
           dotnet publish .\src\ClonarDC.Server\ClonarDC.Server.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=false -p:DebugType=None -p:DebugSymbols=false -o out/backend
           if (-not (Test-Path out/backend/ClonarDC.Server.exe)) { throw 'Backend local não foi gerado.' }
 
-      - name: Account backend integration smoke test
+      - name: Account registration integration smoke test
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
@@ -86,19 +86,44 @@ jobs:
               catch { Start-Sleep -Milliseconds 250 }
             }
             if (-not $ready) { throw 'Backend de contas não iniciou.' }
+
             $suffix = [Guid]::NewGuid().ToString('N')
             $email = "user-$suffix@example.invalid"
             $password = 'BuildOnly!User_2026'
-            $register = Invoke-RestMethod -Method Post -Uri 'http://127.0.0.1:18787/auth/register' -ContentType 'application/json' -Body (@{ name='Build User'; email=$email; password=$password } | ConvertTo-Json)
+            $body = @{ name='Build User'; email=$email; password=$password } | ConvertTo-Json
+            $register = Invoke-RestMethod -Method Post -Uri 'http://127.0.0.1:18787/auth/register' -ContentType 'application/json' -Body $body
             if ($register.status -ne 'pending') { throw 'Cadastro não retornou pending.' }
+
+            $duplicateRejected = $false
+            try {
+              Invoke-RestMethod -Method Post -Uri 'http://127.0.0.1:18787/auth/register' -ContentType 'application/json' -Body $body | Out-Null
+            } catch {
+              if ($_.Exception.Response.StatusCode.value__ -eq 409) { $duplicateRejected = $true }
+            }
+            if (-not $duplicateRejected) { throw 'Cadastro duplicado não foi rejeitado com HTTP 409.' }
+
             $login = Invoke-RestMethod -Method Post -Uri 'http://127.0.0.1:18787/auth/login' -ContentType 'application/json' -Body (@{ email='build-admin@example.invalid'; password='BuildOnly!Admin_2026' } | ConvertTo-Json)
             if ($login.user.role -ne 'admin') { throw 'Login administrativo não retornou admin.' }
-            'Registration and admin login succeeded.' | Set-Content out/auth-smoke.txt
+            'Registration succeeded, returned pending, and duplicate email was clearly rejected.' | Set-Content out/auth-smoke.txt
           }
           finally {
             if ($backend -and -not $backend.HasExited) { Stop-Process -Id $backend.Id -Force }
             Remove-Item Env:CLONARDC_LISTEN,Env:CLONARDC_DATA,Env:CLONARDC_ADMIN_EMAIL,Env:CLONARDC_ADMIN_PASSWORD -ErrorAction SilentlyContinue
           }
+
+      - name: Verify registration UX contract
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $xaml = Get-Content .\src\ClonarDC.Desktop\RegisterWindow.xaml -Raw
+          $code = Get-Content .\src\ClonarDC.Desktop\RegisterWindow.xaml.cs -Raw
+          foreach ($required in @('SuccessPanel','SuccessTitleText','SuccessBodyText','BusyBar','FeedbackBox')) {
+            if (-not $xaml.Contains($required)) { throw "Registration XAML is missing $required." }
+          }
+          foreach ($required in @('DialogResult = true','Creating account','FriendlyRegistrationError','TimeSpan.FromSeconds(25)')) {
+            if (-not $code.Contains($required)) { throw "Registration flow is missing contract: $required." }
+          }
+          'Registration UI contract verified: progress, error feedback, success state, and automatic return.' | Set-Content out/registration-ui-smoke.txt
 
       - name: Desktop runtime smoke test
         shell: pwsh
@@ -157,6 +182,7 @@ jobs:
             out/installer/smoke-install.txt
             out/smoke-runtime.txt
             out/auth-smoke.txt
+            out/registration-ui-smoke.txt
           if-no-files-found: error
 
       - name: Create GitHub release
@@ -167,8 +193,8 @@ jobs:
           $ErrorActionPreference = 'Stop'
           $tag = "v$env:APP_VERSION-alpha.$env:GITHUB_RUN_NUMBER"
           $title = "Clonar DC $env:APP_VERSION Alpha $env:GITHUB_RUN_NUMBER"
-          $notes = 'Multilingual build with English as the default language and optional Portuguese, Spanish, French, and German during installation.'
-          gh release create $tag 'out/installer/Clonar-DC-Setup.exe' 'out/installer/Clonar-DC-Setup.sha256' 'out/installer/smoke-install.txt' 'out/smoke-runtime.txt' 'out/auth-smoke.txt' --title $title --notes $notes --target $env:GITHUB_SHA
+          $notes = 'Registration reliability release: visible progress, clear validation errors, explicit success confirmation, automatic return to sign-in, duplicate-email handling, and multilingual installer.'
+          gh release create $tag 'out/installer/Clonar-DC-Setup.exe' 'out/installer/Clonar-DC-Setup.sha256' 'out/installer/smoke-install.txt' 'out/smoke-runtime.txt' 'out/auth-smoke.txt' 'out/registration-ui-smoke.txt' --title $title --notes $notes --target $env:GITHUB_SHA
 
       - name: Record successful build status
         if: success()
@@ -185,7 +211,7 @@ jobs:
           Release: https://github.com/${{ github.repository }}/releases/tag/v$env:APP_VERSION-alpha.${{ github.run_number }}
           SHA-256: `$hash`
 
-          Validação: desktop e backend compilados, cadastro e login testados, instalador multilíngue criado, idioma en-US persistido e aplicativo instalado iniciado.
+          Validação: desktop e backend compilados; cadastro pending e e-mail duplicado testados; contrato visual de progresso, erro e sucesso verificado; instalador multilíngue criado; aplicativo instalado iniciado.
           "@ | Set-Content build-status/latest.md -Encoding UTF8
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
@@ -202,7 +228,7 @@ jobs:
           # Última build verificada
 
           Status: **FALHA**
-          Commit de origem: `${{ github.sha }}
+          Commit de origem: `${{ github.sha }}`
           Workflow run: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
           "@ | Set-Content build-status/latest.md -Encoding UTF8
           git config user.name 'github-actions[bot]'
