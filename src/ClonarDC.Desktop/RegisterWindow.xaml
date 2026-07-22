@@ -24,8 +24,8 @@
                 <Border Width="86" Height="86" CornerRadius="43" Background="#123A30" BorderBrush="#34D399" BorderThickness="2" HorizontalAlignment="Center">
                     <TextBlock Text="✓" Foreground="#6EE7B7" FontSize="46" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                 </Border>
-                <TextBlock Text="Account created!" FontSize="29" FontWeight="Bold" HorizontalAlignment="Center" Margin="0,24,0,0"/>
-                <TextBlock Text="Your access request was sent successfully and is waiting for administrator approval. You will return to the sign-in screen." Foreground="{StaticResource MutedBrush}" FontSize="15" TextAlignment="Center" TextWrapping="Wrap" Margin="18,12,18,0"/>
+                <TextBlock x:Name="SuccessTitleText" Text="Account created!" FontSize="29" FontWeight="Bold" HorizontalAlignment="Center" Margin="0,24,0,0"/>
+                <TextBlock x:Name="SuccessBodyText" Text="Your access request was sent successfully and is waiting for administrator approval. You will return to the sign-in screen." Foreground="{StaticResource MutedBrush}" FontSize="15" TextAlignment="Center" TextWrapping="Wrap" Margin="18,12,18,0"/>
             </StackPanel>
         </Grid>
     </Border>
