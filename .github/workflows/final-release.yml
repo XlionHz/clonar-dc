@@ -1,4 +1,4 @@
-name: Clonar DC Verified Windows Release
+name: Clonar DC Verified Windows Build
 
 on:
   push:
@@ -11,7 +11,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: clonar-dc-release
+  group: clonar-dc-build
   cancel-in-progress: true
 
 jobs:
@@ -19,7 +19,7 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 60
     env:
-      APP_VERSION: '0.5.1'
+      APP_VERSION: '0.5.3'
 
     steps:
       - name: Checkout
@@ -39,9 +39,34 @@ jobs:
           $output = & dotnet build .\src\ClonarDC.Desktop\ClonarDC.Desktop.csproj -c Release --no-restore 2>&1
           $output | Tee-Object -FilePath build-status\desktop-build.log | Write-Host
           if ($LASTEXITCODE -ne 0) {
-            $output | Select-Object -Last 180 | Set-Content build-status\compile-error.txt
+            $output | Select-Object -Last 220 | Set-Content build-status\compile-error.txt
             throw 'Desktop build failed.'
           }
+
+      - name: Verify Discord connection contract
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $probe = Get-Content .\src\ClonarDC.Desktop\Services\DiscordConnectionProbe.cs -Raw
+          $handler = Get-Content .\src\ClonarDC.Desktop\MainWindow.TokenValidation.cs -Raw
+          $xaml = Get-Content .\src\ClonarDC.Desktop\MainWindow.xaml -Raw
+          foreach ($required in @('users/@me','gateway/bot','ClientWebSocket','["intents"] = 1','GUILD_CREATE','DiscordBot (https://github.com/XlionHz/clonar-dc, 0.5.3)')) {
+            if (-not $probe.Contains($required)) { throw "Discord probe is missing: $required" }
+          }
+          if (-not $handler.Contains('ValidateAndDiscoverAsync')) { throw 'Reliable token handler is not connected to the probe.' }
+          if (-not $xaml.Contains('Click="TestTokenReliable_Click"')) { throw 'The Test Token button still uses the legacy handler.' }
+          'Token validation uses explicit bot REST authentication and Gateway guild discovery. A real Discord token is not available in CI, so live Discord authentication remains a manual test.' | Set-Content out/discord-contract.txt
+
+      - name: Verify dark control templates
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $theme = Get-Content .\src\ClonarDC.Desktop\App.xaml -Raw
+          foreach ($required in @('ControlTemplate TargetType="{x:Type Button}"','ControlTemplate TargetType="{x:Type ComboBox}"','Style TargetType="{x:Type ComboBoxItem}"','#0D0F18','#11131D')) {
+            if (-not $theme.Contains($required)) { throw "Dark theme is missing: $required" }
+          }
+          if ($theme.Contains('Color.FromRgb(248, 250, 252)')) { throw 'A light selector workaround is still present.' }
+          'Buttons, disabled buttons, combo boxes, dropdowns, and combo items use explicit dark templates.' | Set-Content out/theme-contract.txt
 
       - name: Publish desktop self-contained
         shell: pwsh
@@ -50,7 +75,7 @@ jobs:
           New-Item -ItemType Directory -Force -Path out/app | Out-Null
           $fullVersion = "$env:APP_VERSION.$env:GITHUB_RUN_NUMBER"
           dotnet publish .\src\ClonarDC.Desktop\ClonarDC.Desktop.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=false -p:DebugType=None -p:DebugSymbols=false -p:Version=$env:APP_VERSION -p:FileVersion=$fullVersion -p:AssemblyVersion=$fullVersion -o out/app
-          if (-not (Test-Path out/app/ClonarDC.exe)) { throw 'ClonarDC.exe não foi gerado.' }
+          if (-not (Test-Path out/app/ClonarDC.exe)) { throw 'ClonarDC.exe was not generated.' }
 
       - name: Restore, build and publish backend
         shell: pwsh
@@ -65,7 +90,7 @@ jobs:
           }
           New-Item -ItemType Directory -Force -Path out/backend | Out-Null
           dotnet publish .\src\ClonarDC.Server\ClonarDC.Server.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=false -p:DebugType=None -p:DebugSymbols=false -o out/backend
-          if (-not (Test-Path out/backend/ClonarDC.Server.exe)) { throw 'Backend local não foi gerado.' }
+          if (-not (Test-Path out/backend/ClonarDC.Server.exe)) { throw 'Local backend was not generated.' }
 
       - name: Account registration integration smoke test
         shell: pwsh
@@ -85,26 +110,20 @@ jobs:
               try { Invoke-RestMethod -Uri 'http://127.0.0.1:18787/status' -TimeoutSec 1 | Out-Null; $ready = $true; break }
               catch { Start-Sleep -Milliseconds 250 }
             }
-            if (-not $ready) { throw 'Backend de contas não iniciou.' }
-
+            if (-not $ready) { throw 'Account backend did not start.' }
             $suffix = [Guid]::NewGuid().ToString('N')
             $email = "user-$suffix@example.invalid"
             $password = 'BuildOnly!User_2026'
             $body = @{ name='Build User'; email=$email; password=$password } | ConvertTo-Json
             $register = Invoke-RestMethod -Method Post -Uri 'http://127.0.0.1:18787/auth/register' -ContentType 'application/json' -Body $body
-            if ($register.status -ne 'pending') { throw 'Cadastro não retornou pending.' }
-
+            if ($register.status -ne 'pending') { throw 'Registration did not return pending.' }
             $duplicateRejected = $false
-            try {
-              Invoke-RestMethod -Method Post -Uri 'http://127.0.0.1:18787/auth/register' -ContentType 'application/json' -Body $body | Out-Null
-            } catch {
-              if ($_.Exception.Response.StatusCode.value__ -eq 409) { $duplicateRejected = $true }
-            }
-            if (-not $duplicateRejected) { throw 'Cadastro duplicado não foi rejeitado com HTTP 409.' }
-
+            try { Invoke-RestMethod -Method Post -Uri 'http://127.0.0.1:18787/auth/register' -ContentType 'application/json' -Body $body | Out-Null }
+            catch { if ($_.Exception.Response.StatusCode.value__ -eq 409) { $duplicateRejected = $true } }
+            if (-not $duplicateRejected) { throw 'Duplicate registration was not rejected with HTTP 409.' }
             $login = Invoke-RestMethod -Method Post -Uri 'http://127.0.0.1:18787/auth/login' -ContentType 'application/json' -Body (@{ email='build-admin@example.invalid'; password='BuildOnly!Admin_2026' } | ConvertTo-Json)
-            if ($login.user.role -ne 'admin') { throw 'Login administrativo não retornou admin.' }
-            'Registration succeeded, returned pending, and duplicate email was clearly rejected.' | Set-Content out/auth-smoke.txt
+            if ($login.user.role -ne 'admin') { throw 'Admin login did not return admin.' }
+            'Registration succeeded, returned pending, and duplicate email was rejected.' | Set-Content out/auth-smoke.txt
           }
           finally {
             if ($backend -and -not $backend.HasExited) { Stop-Process -Id $backend.Id -Force }
@@ -123,7 +142,7 @@ jobs:
           foreach ($required in @('DialogResult = true','Creating account','FriendlyRegistrationError','TimeSpan.FromSeconds(25)')) {
             if (-not $code.Contains($required)) { throw "Registration flow is missing contract: $required." }
           }
-          'Registration UI contract verified: progress, error feedback, success state, and automatic return.' | Set-Content out/registration-ui-smoke.txt
+          'Registration UI contract verified.' | Set-Content out/registration-ui-smoke.txt
 
       - name: Desktop runtime smoke test
         shell: pwsh
@@ -131,7 +150,7 @@ jobs:
           $ErrorActionPreference = 'Stop'
           $proc = Start-Process -FilePath "$PWD\out\app\ClonarDC.exe" -PassThru
           Start-Sleep -Seconds 8
-          if ($proc.HasExited) { throw "ClonarDC.exe encerrou prematuramente com código $($proc.ExitCode)." }
+          if ($proc.HasExited) { throw "ClonarDC.exe exited early with code $($proc.ExitCode)." }
           Stop-Process -Id $proc.Id -Force
           'Desktop process stayed alive for 8 seconds.' | Set-Content out/smoke-runtime.txt
 
@@ -139,17 +158,46 @@ jobs:
         shell: pwsh
         run: choco install innosetup --no-progress -y
 
-      - name: Build installer and hashes
+      - name: Build installer, hashes and admin update package
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
           $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
-          if (-not (Test-Path $iscc)) { throw 'ISCC.exe não encontrado.' }
+          if (-not (Test-Path $iscc)) { throw 'ISCC.exe was not found.' }
           & $iscc 'installer\ClonarDC.iss'
-          if (-not (Test-Path 'out\installer\Clonar-DC-Setup.exe')) { throw 'Setup.exe não foi gerado.' }
-          $hash = (Get-FileHash 'out\installer\Clonar-DC-Setup.exe' -Algorithm SHA256).Hash
+          $setup = 'out\installer\Clonar-DC-Setup.exe'
+          if (-not (Test-Path $setup)) { throw 'Setup.exe was not generated.' }
+          $hash = (Get-FileHash $setup -Algorithm SHA256).Hash
           $hash | Set-Content 'out\installer\Clonar-DC-Setup.sha256'
           "VERSION=$env:APP_VERSION`nSHA256=$hash" | Set-Content 'out\installer\build-info.txt'
+
+          $packageRoot = 'out\update-package'
+          New-Item -ItemType Directory -Force -Path $packageRoot | Out-Null
+          Copy-Item $setup (Join-Path $packageRoot 'Clonar-DC-Setup.exe')
+          [ordered]@{
+            formatVersion = 1
+            version = $env:APP_VERSION
+            tag = "v$env:APP_VERSION"
+            title = "Clonar DC $env:APP_VERSION"
+            notes = 'Dark controls, reliable official Discord bot token validation through REST and Gateway, and secure administrator update publishing.'
+            setupFile = 'Clonar-DC-Setup.exe'
+            sha256 = $hash
+          } | ConvertTo-Json -Depth 4 | Set-Content (Join-Path $packageRoot 'manifest.json') -Encoding UTF8
+
+          $temporaryZip = "out\Clonar-DC-$env:APP_VERSION-update.zip"
+          $packagePath = "out\Clonar-DC-$env:APP_VERSION.clonardc-update"
+          Compress-Archive -Path "$packageRoot\*" -DestinationPath $temporaryZip -CompressionLevel Optimal -Force
+          Move-Item $temporaryZip $packagePath -Force
+          if (-not (Test-Path $packagePath)) { throw 'Admin update package was not generated.' }
+
+          $verifyRoot = 'out\verify-update-package'
+          Copy-Item $packagePath 'out\verify-update-package.zip' -Force
+          Expand-Archive 'out\verify-update-package.zip' $verifyRoot -Force
+          $manifest = Get-Content (Join-Path $verifyRoot 'manifest.json') -Raw | ConvertFrom-Json
+          $actual = (Get-FileHash (Join-Path $verifyRoot 'Clonar-DC-Setup.exe') -Algorithm SHA256).Hash
+          if ($manifest.version -ne $env:APP_VERSION) { throw 'Update package manifest version is incorrect.' }
+          if ($actual -ne $manifest.sha256) { throw 'Update package SHA-256 verification failed.' }
+          'Admin update package contains a verified installer and manifest.' | Set-Content out/update-package-smoke.txt
 
       - name: Install and launch smoke test
         shell: pwsh
@@ -157,17 +205,17 @@ jobs:
           $ErrorActionPreference = 'Stop'
           $setup = "$PWD\out\installer\Clonar-DC-Setup.exe"
           $install = Start-Process -FilePath $setup -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/SP-','/LANG=en' -Wait -PassThru
-          if ($install.ExitCode -ne 0) { throw "Instalador retornou código $($install.ExitCode)." }
+          if ($install.ExitCode -ne 0) { throw "Installer returned code $($install.ExitCode)." }
           $root = Join-Path $env:LOCALAPPDATA 'Programs\Clonar DC'
           $exe = Join-Path $root 'ClonarDC.exe'
           $backend = Join-Path $root 'backend\ClonarDC.Server.exe'
-          if (-not (Test-Path $exe)) { throw 'Executável instalado não encontrado.' }
-          if (-not (Test-Path $backend)) { throw 'Backend instalado não encontrado.' }
+          if (-not (Test-Path $exe)) { throw 'Installed executable was not found.' }
+          if (-not (Test-Path $backend)) { throw 'Installed backend was not found.' }
           $selectedLanguage = Get-ItemPropertyValue -Path 'HKCU:\Software\Clonar DC' -Name Language
-          if ($selectedLanguage -ne 'en-US') { throw "Idioma do instalador não foi persistido: $selectedLanguage" }
+          if ($selectedLanguage -ne 'en-US') { throw "Installer language was not persisted: $selectedLanguage" }
           $proc = Start-Process -FilePath $exe -PassThru
           Start-Sleep -Seconds 8
-          if ($proc.HasExited) { throw "Aplicativo instalado encerrou prematuramente com código $($proc.ExitCode)." }
+          if ($proc.HasExited) { throw "Installed app exited early with code $($proc.ExitCode)." }
           Stop-Process -Id $proc.Id -Force
           'Installer succeeded, persisted en-US, and installed app stayed alive.' | Set-Content out/installer/smoke-install.txt
 
@@ -180,21 +228,14 @@ jobs:
             out/installer/Clonar-DC-Setup.sha256
             out/installer/build-info.txt
             out/installer/smoke-install.txt
+            out/Clonar-DC-${{ env.APP_VERSION }}.clonardc-update
+            out/update-package-smoke.txt
             out/smoke-runtime.txt
             out/auth-smoke.txt
             out/registration-ui-smoke.txt
+            out/discord-contract.txt
+            out/theme-contract.txt
           if-no-files-found: error
-
-      - name: Create GitHub release
-        shell: pwsh
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          $ErrorActionPreference = 'Stop'
-          $tag = "v$env:APP_VERSION-alpha.$env:GITHUB_RUN_NUMBER"
-          $title = "Clonar DC $env:APP_VERSION Alpha $env:GITHUB_RUN_NUMBER"
-          $notes = 'Registration reliability release: visible progress, clear validation errors, explicit success confirmation, automatic return to sign-in, duplicate-email handling, and multilingual installer.'
-          gh release create $tag 'out/installer/Clonar-DC-Setup.exe' 'out/installer/Clonar-DC-Setup.sha256' 'out/installer/smoke-install.txt' 'out/smoke-runtime.txt' 'out/auth-smoke.txt' 'out/registration-ui-smoke.txt' --title $title --notes $notes --target $env:GITHUB_SHA
 
       - name: Record successful build status
         if: success()
@@ -202,16 +243,15 @@ jobs:
         run: |
           $hash = (Get-Content 'out\installer\Clonar-DC-Setup.sha256' -Raw).Trim()
           @"
-          # Última build verificada
+          # Latest verified build
 
-          Status: **SUCESSO**
-          Versão: `$env:APP_VERSION-alpha.${{ github.run_number }}`
-          Commit de origem: `${{ github.sha }}`
+          Status: **SUCCESS**
+          Version: `$env:APP_VERSION`
+          Source commit: `${{ github.sha }}`
           Workflow run: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
-          Release: https://github.com/${{ github.repository }}/releases/tag/v$env:APP_VERSION-alpha.${{ github.run_number }}
           SHA-256: `$hash`
 
-          Validação: desktop e backend compilados; cadastro pending e e-mail duplicado testados; contrato visual de progresso, erro e sucesso verificado; instalador multilíngue criado; aplicativo instalado iniciado.
+          Validation: desktop and backend compiled; account registration tested; dark control contracts checked; Discord REST/Gateway integration contract checked; installer and admin update package generated and verified; installed app launched.
           "@ | Set-Content build-status/latest.md -Encoding UTF8
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
@@ -225,10 +265,11 @@ jobs:
         run: |
           New-Item -ItemType Directory -Force -Path build-status | Out-Null
           @"
-          # Última build verificada
+          # Latest verified build
 
-          Status: **FALHA**
-          Commit de origem: `${{ github.sha }}`
+          Status: **FAILURE**
+          Version: `$env:APP_VERSION`
+          Source commit: `${{ github.sha }}`
           Workflow run: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
           "@ | Set-Content build-status/latest.md -Encoding UTF8
           git config user.name 'github-actions[bot]'
