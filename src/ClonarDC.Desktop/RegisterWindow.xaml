@@ -2,18 +2,31 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="Create account — Clonar DC" Icon="/ClonarDC;component/Assets/ClonarDC.ico"
-        Width="520" Height="650" WindowStartupLocation="CenterOwner" ResizeMode="NoResize">
+        Width="520" Height="690" WindowStartupLocation="CenterOwner" ResizeMode="NoResize">
     <Border Padding="42" Background="{StaticResource PanelBrush}">
-        <StackPanel>
-            <Image Source="/ClonarDC;component/Assets/ClonarDCLogo.png" Width="70" Height="70" HorizontalAlignment="Left" Margin="0,0,0,14"/>
-            <TextBlock Text="Create account" FontSize="28" FontWeight="Bold"/>
-            <TextBlock Text="After registration, the account will wait for administrator approval." Foreground="{StaticResource MutedBrush}" Margin="0,6,0,24" TextWrapping="Wrap"/>
-            <TextBlock Text="Name" Margin="0,0,0,6"/><TextBox x:Name="NameBox" Height="42"/>
-            <TextBlock Text="Email" Margin="0,14,0,6"/><TextBox x:Name="EmailBox" Height="42"/>
-            <TextBlock Text="Password" Margin="0,14,0,6"/><PasswordBox x:Name="PasswordBox" Height="42"/>
-            <TextBlock Text="Repeat password" Margin="0,14,0,6"/><PasswordBox x:Name="ConfirmBox" Height="42"/>
-            <Button x:Name="CreateButton" Style="{StaticResource PrimaryButton}" Content="Create account" Height="44" Margin="0,22,0,0" Click="CreateButton_Click"/>
-            <TextBlock x:Name="StatusText" Foreground="{StaticResource MutedBrush}" TextWrapping="Wrap" Margin="0,16,0,0"/>
-        </StackPanel>
+        <Grid>
+            <StackPanel x:Name="FormPanel">
+                <Image Source="/ClonarDC;component/Assets/ClonarDCLogo.png" Width="70" Height="70" HorizontalAlignment="Left" Margin="0,0,0,14"/>
+                <TextBlock Text="Create account" FontSize="28" FontWeight="Bold"/>
+                <TextBlock Text="After registration, the account will wait for administrator approval." Foreground="{StaticResource MutedBrush}" Margin="0,6,0,24" TextWrapping="Wrap"/>
+                <TextBlock Text="Name" Margin="0,0,0,6"/><TextBox x:Name="NameBox" Height="42"/>
+                <TextBlock Text="Email" Margin="0,14,0,6"/><TextBox x:Name="EmailBox" Height="42"/>
+                <TextBlock Text="Password" Margin="0,14,0,6"/><PasswordBox x:Name="PasswordBox" Height="42"/>
+                <TextBlock Text="Repeat password" Margin="0,14,0,6"/><PasswordBox x:Name="ConfirmBox" Height="42"/>
+                <Button x:Name="CreateButton" Style="{StaticResource PrimaryButton}" Content="Create account" Height="44" Margin="0,22,0,0" Click="CreateButton_Click" IsDefault="True"/>
+                <ProgressBar x:Name="BusyBar" Height="3" IsIndeterminate="True" Visibility="Collapsed" Margin="0,12,0,0"/>
+                <Border x:Name="FeedbackBox" Visibility="Collapsed" Background="#24151D" BorderBrush="#FB7185" BorderThickness="1" CornerRadius="8" Padding="12" Margin="0,12,0,0">
+                    <TextBlock x:Name="StatusText" Foreground="#FDA4AF" TextWrapping="Wrap"/>
+                </Border>
+            </StackPanel>
+
+            <StackPanel x:Name="SuccessPanel" Visibility="Collapsed" VerticalAlignment="Center" HorizontalAlignment="Stretch">
+                <Border Width="86" Height="86" CornerRadius="43" Background="#123A30" BorderBrush="#34D399" BorderThickness="2" HorizontalAlignment="Center">
+                    <TextBlock Text="✓" Foreground="#6EE7B7" FontSize="46" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                </Border>
+                <TextBlock Text="Account created!" FontSize="29" FontWeight="Bold" HorizontalAlignment="Center" Margin="0,24,0,0"/>
+                <TextBlock Text="Your access request was sent successfully and is waiting for administrator approval. You will return to the sign-in screen." Foreground="{StaticResource MutedBrush}" FontSize="15" TextAlignment="Center" TextWrapping="Wrap" Margin="18,12,18,0"/>
+            </StackPanel>
+        </Grid>
     </Border>
 </Window>
