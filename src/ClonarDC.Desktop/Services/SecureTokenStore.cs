@@ -1,20 +1,46 @@
 using System.ComponentModel;
 using System.Runtime.InteropServices;
+using System.Security.Cryptography;
 using System.Text;
 
 namespace ClonarDC.Services;
 
 public sealed class SecureTokenStore
 {
-    private readonly string _path = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "ClonarDC", "token.dat");
+    private readonly string _path;
+    private readonly string _description;
+
+    public SecureTokenStore(string fileName = "token.dat", string description = "Clonar DC")
+    {
+        var safeFileName = Path.GetFileName(fileName);
+        if (string.IsNullOrWhiteSpace(safeFileName)) safeFileName = "token.dat";
+
+        _path = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "ClonarDC",
+            safeFileName);
+        _description = description;
+    }
 
     public void Save(string token)
     {
+        if (string.IsNullOrWhiteSpace(token))
+        {
+            Clear();
+            return;
+        }
+
         Directory.CreateDirectory(Path.GetDirectoryName(_path)!);
         var input = Encoding.UTF8.GetBytes(token);
-        var protectedBytes = Protect(input);
-        File.WriteAllBytes(_path, protectedBytes);
-        CryptographicOperations.ZeroMemory(input);
+        try
+        {
+            var protectedBytes = Protect(input, _description);
+            File.WriteAllBytes(_path, protectedBytes);
+        }
+        finally
+        {
+            CryptographicOperations.ZeroMemory(input);
+        }
     }
 
     public string? Load()
@@ -35,10 +61,10 @@ public sealed class SecureTokenStore
         try { if (File.Exists(_path)) File.Delete(_path); } catch { }
     }
 
-    private static byte[] Protect(byte[] data) => Crypt(data, protect: true);
-    private static byte[] Unprotect(byte[] data) => Crypt(data, protect: false);
+    private static byte[] Protect(byte[] data, string description) => Crypt(data, protect: true, description);
+    private static byte[] Unprotect(byte[] data) => Crypt(data, protect: false, null);
 
-    private static byte[] Crypt(byte[] data, bool protect)
+    private static byte[] Crypt(byte[] data, bool protect, string? description)
     {
         var inBlob = new DATA_BLOB();
         var outBlob = new DATA_BLOB();
@@ -48,7 +74,7 @@ public sealed class SecureTokenStore
             inBlob.pbData = Marshal.AllocHGlobal(data.Length);
             Marshal.Copy(data, 0, inBlob.pbData, data.Length);
             bool ok = protect
-                ? CryptProtectData(ref inBlob, "Clonar DC", IntPtr.Zero, IntPtr.Zero, IntPtr.Zero, 0, ref outBlob)
+                ? CryptProtectData(ref inBlob, description, IntPtr.Zero, IntPtr.Zero, IntPtr.Zero, 0, ref outBlob)
                 : CryptUnprotectData(ref inBlob, IntPtr.Zero, IntPtr.Zero, IntPtr.Zero, IntPtr.Zero, 0, ref outBlob);
             if (!ok) throw new Win32Exception(Marshal.GetLastWin32Error());
             var result = new byte[outBlob.cbData];
