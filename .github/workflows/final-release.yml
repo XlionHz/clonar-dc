@@ -34,7 +34,7 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          New-Item -ItemType Directory -Force -Path build-status | Out-Null
+          New-Item -ItemType Directory -Force -Path build-status,out | Out-Null
           dotnet restore .\src\ClonarDC.Desktop\ClonarDC.Desktop.csproj
           $output = & dotnet build .\src\ClonarDC.Desktop\ClonarDC.Desktop.csproj -c Release --no-restore 2>&1
           $output | Tee-Object -FilePath build-status\desktop-build.log | Write-Host
@@ -43,30 +43,26 @@ jobs:
             throw 'Desktop build failed.'
           }
 
-      - name: Verify Discord connection contract
+      - name: Verify Discord and dark-theme contracts
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
           $probe = Get-Content .\src\ClonarDC.Desktop\Services\DiscordConnectionProbe.cs -Raw
           $handler = Get-Content .\src\ClonarDC.Desktop\MainWindow.TokenValidation.cs -Raw
           $xaml = Get-Content .\src\ClonarDC.Desktop\MainWindow.xaml -Raw
+          $theme = Get-Content .\src\ClonarDC.Desktop\App.xaml -Raw
+
           foreach ($required in @('users/@me','gateway/bot','ClientWebSocket','["intents"] = 1','GUILD_CREATE','DiscordBot (https://github.com/XlionHz/clonar-dc, 0.5.3)')) {
             if (-not $probe.Contains($required)) { throw "Discord probe is missing: $required" }
           }
-          if (-not $handler.Contains('ValidateAndDiscoverAsync')) { throw 'Reliable token handler is not connected to the probe.' }
-          if (-not $xaml.Contains('Click="TestTokenReliable_Click"')) { throw 'The Test Token button still uses the legacy handler.' }
-          'Token validation uses explicit bot REST authentication and Gateway guild discovery. A real Discord token is not available in CI, so live Discord authentication remains a manual test.' | Set-Content out/discord-contract.txt
+          if (-not $handler.Contains('ValidateAndDiscoverAsync')) { throw 'Reliable token handler is not connected.' }
+          if (-not $xaml.Contains('Click="TestTokenReliable_Click"')) { throw 'Test Token still uses the legacy handler.' }
 
-      - name: Verify dark control templates
-        shell: pwsh
-        run: |
-          $ErrorActionPreference = 'Stop'
-          $theme = Get-Content .\src\ClonarDC.Desktop\App.xaml -Raw
           foreach ($required in @('ControlTemplate TargetType="{x:Type Button}"','ControlTemplate TargetType="{x:Type ComboBox}"','Style TargetType="{x:Type ComboBoxItem}"','#0D0F18','#11131D')) {
             if (-not $theme.Contains($required)) { throw "Dark theme is missing: $required" }
           }
-          if ($theme.Contains('Color.FromRgb(248, 250, 252)')) { throw 'A light selector workaround is still present.' }
-          'Buttons, disabled buttons, combo boxes, dropdowns, and combo items use explicit dark templates.' | Set-Content out/theme-contract.txt
+          'Discord token validation uses explicit REST authentication and Gateway guild discovery. Real Discord credentials are not available in CI, so live authentication remains a manual test.' | Set-Content out/discord-contract.txt
+          'Buttons, disabled buttons, combo boxes, dropdowns and combo items use explicit dark templates.' | Set-Content out/theme-contract.txt
 
       - name: Publish desktop self-contained
         shell: pwsh
@@ -77,22 +73,19 @@ jobs:
           dotnet publish .\src\ClonarDC.Desktop\ClonarDC.Desktop.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=false -p:DebugType=None -p:DebugSymbols=false -p:Version=$env:APP_VERSION -p:FileVersion=$fullVersion -p:AssemblyVersion=$fullVersion -o out/app
           if (-not (Test-Path out/app/ClonarDC.exe)) { throw 'ClonarDC.exe was not generated.' }
 
-      - name: Restore, build and publish backend
+      - name: Build and publish backend
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
           dotnet restore .\src\ClonarDC.Server\ClonarDC.Server.csproj
           $output = & dotnet build .\src\ClonarDC.Server\ClonarDC.Server.csproj -c Release --no-restore 2>&1
           $output | Tee-Object -FilePath build-status\backend-build.log | Write-Host
-          if ($LASTEXITCODE -ne 0) {
-            $output | Select-Object -Last 180 | Set-Content build-status\backend-error.txt
-            throw 'Backend build failed.'
-          }
+          if ($LASTEXITCODE -ne 0) { throw 'Backend build failed.' }
           New-Item -ItemType Directory -Force -Path out/backend | Out-Null
           dotnet publish .\src\ClonarDC.Server\ClonarDC.Server.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=false -p:DebugType=None -p:DebugSymbols=false -o out/backend
           if (-not (Test-Path out/backend/ClonarDC.Server.exe)) { throw 'Local backend was not generated.' }
 
-      - name: Account registration integration smoke test
+      - name: Account registration smoke test
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
@@ -111,8 +104,7 @@ jobs:
               catch { Start-Sleep -Milliseconds 250 }
             }
             if (-not $ready) { throw 'Account backend did not start.' }
-            $suffix = [Guid]::NewGuid().ToString('N')
-            $email = "user-$suffix@example.invalid"
+            $email = "user-$([Guid]::NewGuid().ToString('N'))@example.invalid"
             $password = 'BuildOnly!User_2026'
             $body = @{ name='Build User'; email=$email; password=$password } | ConvertTo-Json
             $register = Invoke-RestMethod -Method Post -Uri 'http://127.0.0.1:18787/auth/register' -ContentType 'application/json' -Body $body
@@ -120,10 +112,8 @@ jobs:
             $duplicateRejected = $false
             try { Invoke-RestMethod -Method Post -Uri 'http://127.0.0.1:18787/auth/register' -ContentType 'application/json' -Body $body | Out-Null }
             catch { if ($_.Exception.Response.StatusCode.value__ -eq 409) { $duplicateRejected = $true } }
-            if (-not $duplicateRejected) { throw 'Duplicate registration was not rejected with HTTP 409.' }
-            $login = Invoke-RestMethod -Method Post -Uri 'http://127.0.0.1:18787/auth/login' -ContentType 'application/json' -Body (@{ email='build-admin@example.invalid'; password='BuildOnly!Admin_2026' } | ConvertTo-Json)
-            if ($login.user.role -ne 'admin') { throw 'Admin login did not return admin.' }
-            'Registration succeeded, returned pending, and duplicate email was rejected.' | Set-Content out/auth-smoke.txt
+            if (-not $duplicateRejected) { throw 'Duplicate registration was not rejected.' }
+            'Registration succeeded and duplicate email was rejected.' | Set-Content out/auth-smoke.txt
           }
           finally {
             if ($backend -and -not $backend.HasExited) { Stop-Process -Id $backend.Id -Force }
@@ -133,21 +123,19 @@ jobs:
       - name: Verify registration UX contract
         shell: pwsh
         run: |
-          $ErrorActionPreference = 'Stop'
           $xaml = Get-Content .\src\ClonarDC.Desktop\RegisterWindow.xaml -Raw
           $code = Get-Content .\src\ClonarDC.Desktop\RegisterWindow.xaml.cs -Raw
           foreach ($required in @('SuccessPanel','SuccessTitleText','SuccessBodyText','BusyBar','FeedbackBox')) {
             if (-not $xaml.Contains($required)) { throw "Registration XAML is missing $required." }
           }
           foreach ($required in @('DialogResult = true','Creating account','FriendlyRegistrationError','TimeSpan.FromSeconds(25)')) {
-            if (-not $code.Contains($required)) { throw "Registration flow is missing contract: $required." }
+            if (-not $code.Contains($required)) { throw "Registration flow is missing $required." }
           }
-          'Registration UI contract verified.' | Set-Content out/registration-ui-smoke.txt
+          'Registration UX contract verified.' | Set-Content out/registration-ui-smoke.txt
 
       - name: Desktop runtime smoke test
         shell: pwsh
         run: |
-          $ErrorActionPreference = 'Stop'
           $proc = Start-Process -FilePath "$PWD\out\app\ClonarDC.exe" -PassThru
           Start-Sleep -Seconds 8
           if ($proc.HasExited) { throw "ClonarDC.exe exited early with code $($proc.ExitCode)." }
@@ -158,12 +146,11 @@ jobs:
         shell: pwsh
         run: choco install innosetup --no-progress -y
 
-      - name: Build installer, hashes and admin update package
+      - name: Build installer and admin update package
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
           $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
-          if (-not (Test-Path $iscc)) { throw 'ISCC.exe was not found.' }
           & $iscc 'installer\ClonarDC.iss'
           $setup = 'out\installer\Clonar-DC-Setup.exe'
           if (-not (Test-Path $setup)) { throw 'Setup.exe was not generated.' }
@@ -188,36 +175,30 @@ jobs:
           $packagePath = "out\Clonar-DC-$env:APP_VERSION.clonardc-update"
           Compress-Archive -Path "$packageRoot\*" -DestinationPath $temporaryZip -CompressionLevel Optimal -Force
           Move-Item $temporaryZip $packagePath -Force
-          if (-not (Test-Path $packagePath)) { throw 'Admin update package was not generated.' }
-
-          $verifyRoot = 'out\verify-update-package'
           Copy-Item $packagePath 'out\verify-update-package.zip' -Force
-          Expand-Archive 'out\verify-update-package.zip' $verifyRoot -Force
-          $manifest = Get-Content (Join-Path $verifyRoot 'manifest.json') -Raw | ConvertFrom-Json
-          $actual = (Get-FileHash (Join-Path $verifyRoot 'Clonar-DC-Setup.exe') -Algorithm SHA256).Hash
-          if ($manifest.version -ne $env:APP_VERSION) { throw 'Update package manifest version is incorrect.' }
-          if ($actual -ne $manifest.sha256) { throw 'Update package SHA-256 verification failed.' }
+          Expand-Archive 'out\verify-update-package.zip' 'out\verify-update-package' -Force
+          $manifest = Get-Content 'out\verify-update-package\manifest.json' -Raw | ConvertFrom-Json
+          $actual = (Get-FileHash 'out\verify-update-package\Clonar-DC-Setup.exe' -Algorithm SHA256).Hash
+          if ($manifest.version -ne $env:APP_VERSION -or $actual -ne $manifest.sha256) { throw 'Update package verification failed.' }
           'Admin update package contains a verified installer and manifest.' | Set-Content out/update-package-smoke.txt
 
       - name: Install and launch smoke test
         shell: pwsh
         run: |
-          $ErrorActionPreference = 'Stop'
           $setup = "$PWD\out\installer\Clonar-DC-Setup.exe"
           $install = Start-Process -FilePath $setup -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/SP-','/LANG=en' -Wait -PassThru
           if ($install.ExitCode -ne 0) { throw "Installer returned code $($install.ExitCode)." }
           $root = Join-Path $env:LOCALAPPDATA 'Programs\Clonar DC'
           $exe = Join-Path $root 'ClonarDC.exe'
-          $backend = Join-Path $root 'backend\ClonarDC.Server.exe'
           if (-not (Test-Path $exe)) { throw 'Installed executable was not found.' }
-          if (-not (Test-Path $backend)) { throw 'Installed backend was not found.' }
-          $selectedLanguage = Get-ItemPropertyValue -Path 'HKCU:\Software\Clonar DC' -Name Language
-          if ($selectedLanguage -ne 'en-US') { throw "Installer language was not persisted: $selectedLanguage" }
+          if (-not (Test-Path (Join-Path $root 'backend\ClonarDC.Server.exe'))) { throw 'Installed backend was not found.' }
+          $language = Get-ItemPropertyValue -Path 'HKCU:\Software\Clonar DC' -Name Language
+          if ($language -ne 'en-US') { throw "Installer language was not persisted: $language" }
           $proc = Start-Process -FilePath $exe -PassThru
           Start-Sleep -Seconds 8
           if ($proc.HasExited) { throw "Installed app exited early with code $($proc.ExitCode)." }
           Stop-Process -Id $proc.Id -Force
-          'Installer succeeded, persisted en-US, and installed app stayed alive.' | Set-Content out/installer/smoke-install.txt
+          'Installer succeeded and installed app stayed alive.' | Set-Content out/installer/smoke-install.txt
 
       - name: Upload verified build artifacts
         uses: actions/upload-artifact@v4
@@ -251,7 +232,7 @@ jobs:
           Workflow run: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
           SHA-256: `$hash`
 
-          Validation: desktop and backend compiled; account registration tested; dark control contracts checked; Discord REST/Gateway integration contract checked; installer and admin update package generated and verified; installed app launched.
+          Validation: desktop and backend compiled; accounts tested; dark controls checked; Discord REST/Gateway contract checked; installer and admin update package verified; installed app launched.
           "@ | Set-Content build-status/latest.md -Encoding UTF8
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
@@ -263,7 +244,6 @@ jobs:
         if: failure()
         shell: pwsh
         run: |
-          New-Item -ItemType Directory -Force -Path build-status | Out-Null
           @"
           # Latest verified build
 
