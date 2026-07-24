@@ -4,6 +4,11 @@
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <AssemblyName>GuildSync.Bot</AssemblyName>
+    <RootNamespace>GuildSync.Bot</RootNamespace>
+    <Product>GuildSync Bot</Product>
+    <Description>Official slash-command bot for GuildSync account linking, licenses and checkout.</Description>
+    <Version>0.1.0</Version>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Discord.Net" Version="3.18.0" />
