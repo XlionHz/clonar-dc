@@ -4,7 +4,8 @@ using System.Text;
 using System.Text.Json;
 
 var builder = WebApplication.CreateBuilder(args);
-var listenAddress = Environment.GetEnvironmentVariable("CLONARDC_LISTEN");
+var listenAddress = Environment.GetEnvironmentVariable("GUILDSYNC_LISTEN")
+                    ?? Environment.GetEnvironmentVariable("CLONARDC_LISTEN");
 if (string.IsNullOrWhiteSpace(listenAddress))
 {
     var port = Environment.GetEnvironmentVariable("PORT");
@@ -15,16 +16,21 @@ if (string.IsNullOrWhiteSpace(listenAddress))
 builder.WebHost.UseUrls(listenAddress);
 var app = builder.Build();
 
-var dataRoot = Environment.GetEnvironmentVariable("CLONARDC_DATA") ?? Path.Combine(AppContext.BaseDirectory, "data");
+var dataRoot = Environment.GetEnvironmentVariable("GUILDSYNC_DATA")
+               ?? Environment.GetEnvironmentVariable("CLONARDC_DATA")
+               ?? Path.Combine(AppContext.BaseDirectory, "data");
 var persistence = StatePersistenceFactory.Create(dataRoot);
 var store = new JsonStore(persistence);
 await store.InitializeAsync();
 await store.EnsureBootstrapAdminAsync(
-    Environment.GetEnvironmentVariable("CLONARDC_ADMIN_EMAIL"),
-    Environment.GetEnvironmentVariable("CLONARDC_ADMIN_PASSWORD"));
+    Environment.GetEnvironmentVariable("GUILDSYNC_ADMIN_EMAIL")
+    ?? Environment.GetEnvironmentVariable("CLONARDC_ADMIN_EMAIL"),
+    Environment.GetEnvironmentVariable("GUILDSYNC_ADMIN_PASSWORD")
+    ?? Environment.GetEnvironmentVariable("CLONARDC_ADMIN_PASSWORD"));
 
 var paymentOptions = MercadoPagoOptions.FromEnvironment();
 var mercadoPago = new MercadoPagoClient(paymentOptions);
+var discordBotApiKey = Environment.GetEnvironmentVariable("GUILDSYNC_BOT_API_KEY")?.Trim() ?? string.Empty;
 var attempts = new ConcurrentDictionary<string, Queue<DateTimeOffset>>(StringComparer.OrdinalIgnoreCase);
 
 app.Use(async (ctx, next) =>
@@ -36,15 +42,16 @@ app.Use(async (ctx, next) =>
     await next();
 });
 
-app.MapGet("/", () => Results.Text("Clonar DC API online", "text/plain; charset=utf-8"));
+app.MapGet("/", () => Results.Text("GuildSync API online", "text/plain; charset=utf-8"));
 app.MapGet("/status", () => Results.Ok(new
 {
-    service = "Clonar DC API",
-    version = "0.4.0",
+    service = "GuildSync API",
+    version = "0.5.0",
     utc = DateTimeOffset.UtcNow,
     storage = persistence.Kind,
     paymentsConfigured = paymentOptions.IsCheckoutConfigured,
-    webhookConfigured = paymentOptions.IsWebhookConfigured
+    webhookConfigured = paymentOptions.IsWebhookConfigured,
+    discordIntegrationConfigured = !string.IsNullOrWhiteSpace(discordBotApiKey)
 }));
 
 app.MapPost("/auth/register", async (RegisterRequest req, HttpContext ctx) =>
@@ -52,7 +59,9 @@ app.MapPost("/auth/register", async (RegisterRequest req, HttpContext ctx) =>
     if (string.IsNullOrWhiteSpace(req.Name) || string.IsNullOrWhiteSpace(req.Email) || req.Password?.Length < 8)
         return Results.BadRequest(new { error = "Nome, e-mail e senha com pelo menos 8 caracteres são obrigatórios." });
     var result = await store.RegisterAsync(req.Name.Trim(), req.Email.Trim(), req.Password!);
-    return result.Ok ? Results.Ok(new { status = "pending", message = "Esperando autorização" }) : Results.Conflict(new { error = result.Error });
+    return result.Ok
+        ? Results.Ok(new { status = "pending", message = "Conta GuildSync criada. Escolha uma licença para ativar os recursos protegidos." })
+        : Results.Conflict(new { error = result.Error });
 });
 
 app.MapPost("/auth/login", async (LoginRequest req, HttpContext ctx) =>
@@ -110,6 +119,7 @@ app.MapGet("/admin/audit", async (HttpContext ctx) =>
 });
 
 app.MapMercadoPagoEndpoints(store, mercadoPago, paymentOptions);
+app.MapDiscordIntegrationEndpoints(store, mercadoPago, paymentOptions, discordBotApiKey);
 app.Run();
 
 static bool AllowAttempt(ConcurrentDictionary<string, Queue<DateTimeOffset>> map, string key)
@@ -160,7 +170,7 @@ sealed class UserRecord
     public string PasswordHash { get; set; } = "";
     public string Role { get; set; } = "user";
     public string Status { get; set; } = "pending";
-    public string LicenseLabel { get; set; } = "Pendente";
+    public string LicenseLabel { get; set; } = "Pending";
     public DateTimeOffset? ExpiresAt { get; set; }
     public int DeviceLimit { get; set; } = 1;
     public int DeviceCount { get; set; }
@@ -202,6 +212,12 @@ sealed partial class JsonStore
             else
             {
                 _db = existing;
+                _db.Users ??= [];
+                _db.Sessions ??= [];
+                _db.Audit ??= [];
+                _db.Payments ??= [];
+                _db.DiscordLinks ??= [];
+                _db.DiscordLinkCodes ??= [];
             }
         }
         finally
@@ -220,13 +236,13 @@ sealed partial class JsonStore
             var (salt, hash) = Passwords.Hash(password);
             _db.Users.Add(new UserRecord
             {
-                Name = "Administrador",
+                Name = "Administrator",
                 Email = NormalizeEmail(email),
                 PasswordSalt = salt,
                 PasswordHash = hash,
                 Role = "admin",
                 Status = "active",
-                LicenseLabel = "Permanente",
+                LicenseLabel = "Permanent",
                 DeviceLimit = 5
             });
             await SaveUnsafeAsync();
@@ -268,7 +284,7 @@ sealed partial class JsonStore
             if (user.Status == "active" && user.ExpiresAt is not null && user.ExpiresAt <= DateTimeOffset.UtcNow)
             {
                 user.Status = "expired";
-                user.LicenseLabel = "Expirada";
+                user.LicenseLabel = "Expired";
             }
 
             user.LastAccess = DateTimeOffset.UtcNow;
@@ -376,23 +392,23 @@ sealed partial class JsonStore
         {
             case "permanent":
                 user.ExpiresAt = null;
-                user.LicenseLabel = "Permanente";
+                user.LicenseLabel = "Permanent";
                 break;
             case "3m":
                 user.ExpiresAt = now.AddMonths(3);
-                user.LicenseLabel = "3 meses";
+                user.LicenseLabel = "3 months";
                 break;
             case "6m":
                 user.ExpiresAt = now.AddMonths(6);
-                user.LicenseLabel = "6 meses";
+                user.LicenseLabel = "6 months";
                 break;
             case "12m":
                 user.ExpiresAt = now.AddMonths(12);
-                user.LicenseLabel = "12 meses";
+                user.LicenseLabel = "12 months";
                 break;
             default:
                 user.ExpiresAt = now.AddMonths(1);
-                user.LicenseLabel = "1 mês";
+                user.LicenseLabel = "1 month";
                 break;
         }
     }
