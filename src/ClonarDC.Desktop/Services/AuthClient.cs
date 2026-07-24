@@ -6,11 +6,12 @@ public sealed class AuthClient
 {
     private readonly HttpClient _http;
     public string BaseUrl { get; }
+    public bool UsesCentralBackend => ApiEndpointResolver.IsCentral(BaseUrl);
 
     public AuthClient(string? baseUrl = null)
     {
-        BaseUrl = (baseUrl ?? Environment.GetEnvironmentVariable("CLONARDC_API") ?? "http://127.0.0.1:8787").TrimEnd('/');
-        _http = new HttpClient { BaseAddress = new Uri(BaseUrl + "/"), Timeout = TimeSpan.FromSeconds(15) };
+        BaseUrl = ApiEndpointResolver.Resolve(baseUrl);
+        _http = new HttpClient { BaseAddress = new Uri(BaseUrl + "/"), Timeout = TimeSpan.FromSeconds(20) };
     }
 
     public async Task<AppSession> LoginAsync(
