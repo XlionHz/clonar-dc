@@ -7,13 +7,17 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <AssemblyName>ClonarDC</AssemblyName>
     <RootNamespace>ClonarDC</RootNamespace>
-    <Version>0.6.1</Version>
-    <FileVersion>0.6.1.0</FileVersion>
-    <AssemblyVersion>0.6.1.0</AssemblyVersion>
+    <Product>GuildSync</Product>
+    <Description>Visual backup, cloning and synchronization tools for Discord communities.</Description>
+    <Version>0.7.0</Version>
+    <FileVersion>0.7.0.0</FileVersion>
+    <AssemblyVersion>0.7.0.0</AssemblyVersion>
     <ApplicationManifest>app.manifest</ApplicationManifest>
-    <ApplicationIcon>Assets/ClonarDC.ico</ApplicationIcon>
+    <ApplicationIcon>Assets/GuildSync.ico</ApplicationIcon>
   </PropertyGroup>
   <ItemGroup>
+    <Resource Include="Assets/GuildSyncLogo.png" />
+    <Resource Include="Assets/GuildSync.ico" />
     <Resource Include="Assets/ClonarDCLogo.png" />
     <Resource Include="Assets/ClonarDC.ico" />
     <Content Include="api-url.txt">
