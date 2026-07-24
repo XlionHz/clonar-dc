@@ -4,7 +4,8 @@ namespace ClonarDC.Services;
 
 public static class ApiEndpointResolver
 {
-    private const string RegistryPath = @"Software\Clonar DC";
+    private const string RegistryPath = @"Software\GuildSync";
+    private const string LegacyRegistryPath = @"Software\Clonar DC";
     private const string RegistryValue = "ApiUrl";
     private const string LocalFallback = "http://127.0.0.1:8787";
 
@@ -13,8 +14,10 @@ public static class ApiEndpointResolver
         foreach (var candidate in new[]
                  {
                      explicitUrl,
+                     Environment.GetEnvironmentVariable("GUILDSYNC_API"),
                      Environment.GetEnvironmentVariable("CLONARDC_API"),
-                     ReadRegistry(),
+                     ReadRegistry(RegistryPath),
+                     ReadRegistry(LegacyRegistryPath),
                      ReadBundledFile()
                  })
         {
@@ -27,7 +30,7 @@ public static class ApiEndpointResolver
     public static void SaveForCurrentUser(string url)
     {
         if (!TryNormalize(url, out var normalized))
-            throw new InvalidOperationException("Use uma URL HTTPS válida ou um endereço local de desenvolvimento.");
+            throw new InvalidOperationException("Use a valid HTTPS URL or a local development address.");
 
         using var key = Registry.CurrentUser.CreateSubKey(RegistryPath);
         key.SetValue(RegistryValue, normalized, RegistryValueKind.String);
@@ -39,11 +42,11 @@ public static class ApiEndpointResolver
         return !uri.IsLoopback && !uri.Host.Equals("localhost", StringComparison.OrdinalIgnoreCase);
     }
 
-    private static string? ReadRegistry()
+    private static string? ReadRegistry(string path)
     {
         try
         {
-            using var key = Registry.CurrentUser.OpenSubKey(RegistryPath);
+            using var key = Registry.CurrentUser.OpenSubKey(path);
             return key?.GetValue(RegistryValue) as string;
         }
         catch
