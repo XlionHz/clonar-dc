@@ -125,7 +125,7 @@ sealed class PostgresStatePersistence : IStatePersistence
             Password = userInfo.Length > 1 ? Uri.UnescapeDataString(userInfo[1]) : string.Empty,
             Database = Uri.UnescapeDataString(uri.AbsolutePath.TrimStart('/')),
             Pooling = true,
-            MaximumPoolSize = 20,
+            MaxPoolSize = 20,
             Timeout = 15,
             CommandTimeout = 30,
             SslMode = SslMode.Prefer
