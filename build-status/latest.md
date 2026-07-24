@@ -1,9 +1,6 @@
 # Latest verified build
 
-Status: **SUCCESS**
+Status: **FAILURE**
 Version: $env:APP_VERSION
-Source commit: d778f60e3029a430d33cb6609067f9be6f31fb19
-Workflow run: https://github.com/XlionHz/clonar-dc/actions/runs/30076111546
-SHA-256: $hash
-
-Validation: token values accepted locally without format validation; dark controls checked; desktop and backend compiled; registration tested; installer and admin update package verified; installed app launched.
+Source commit: d79b8f0ad8474e6c175c007225eb13bf5878c36f
+Workflow run: https://github.com/XlionHz/clonar-dc/actions/runs/30079070668
