@@ -9,7 +9,7 @@ internal static class BrandIcon
     {
         var image = new BitmapImage();
         image.BeginInit();
-        image.UriSource = new Uri("pack://application:,,,/ClonarDC;component/Assets/ClonarDCLogo.png", UriKind.Absolute);
+        image.UriSource = new Uri("pack://application:,,,/ClonarDC;component/Assets/GuildSyncLogo.png", UriKind.Absolute);
         image.CacheOption = BitmapCacheOption.OnLoad;
         image.EndInit();
         image.Freeze();
