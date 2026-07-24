@@ -1,5 +1,5 @@
 #define MyAppName "Clonar DC"
-#define MyAppVersion "0.6.0"
+#define MyAppVersion "0.6.1"
 #define MyAppPublisher "Clonar DC"
 #define MyAppExeName "ClonarDC.exe"
 
