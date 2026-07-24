@@ -88,6 +88,25 @@ public sealed class AuthClient
                ?? throw new InvalidOperationException("O servidor não retornou o estado do pagamento.");
     }
 
+    public async Task<DiscordLinkStatusDto> LinkDiscordAsync(AppSession session, string code, CancellationToken ct = default)
+    {
+        using var res = await SendAuthorizedAsync(HttpMethod.Post, "discord/link/claim", session, new { code }, ct);
+        return JsonSerializer.Deserialize<DiscordLinkStatusDto>(await res.Content.ReadAsStringAsync(ct), JsonOptions)
+               ?? throw new InvalidOperationException("O servidor não confirmou a conexão com o Discord.");
+    }
+
+    public async Task<DiscordLinkStatusDto> GetDiscordLinkStatusAsync(AppSession session, CancellationToken ct = default)
+    {
+        using var res = await SendAuthorizedAsync(HttpMethod.Get, "discord/link/status", session, null, ct);
+        return JsonSerializer.Deserialize<DiscordLinkStatusDto>(await res.Content.ReadAsStringAsync(ct), JsonOptions)
+               ?? new DiscordLinkStatusDto(false, null, null);
+    }
+
+    public async Task UnlinkDiscordAsync(AppSession session, CancellationToken ct = default)
+    {
+        using var _ = await SendAuthorizedAsync(HttpMethod.Delete, "discord/link", session, null, ct);
+    }
+
     public async Task<List<AdminUserDto>> GetUsersAsync(AppSession session, CancellationToken ct = default)
     {
         await LocalBackendManager.EnsureStartedAsync(BaseUrl, cancellationToken: ct);
@@ -142,3 +161,4 @@ public sealed record PaymentPlanDto(string Code, string Name, decimal Price, str
 public sealed record PaymentPlansResponse(bool CheckoutConfigured, bool WebhookConfigured, string Environment, List<PaymentPlanDto> Plans);
 public sealed record CheckoutResponse(string OrderId, string PreferenceId, string CheckoutUrl, string Environment);
 public sealed record PaymentOrderDto(string Id, string PlanCode, string PlanName, decimal Amount, string Currency, string Status, DateTimeOffset CreatedAt, DateTimeOffset UpdatedAt);
+public sealed record DiscordLinkStatusDto(bool Linked, string? DiscordUserId, DateTimeOffset? LinkedAt);
