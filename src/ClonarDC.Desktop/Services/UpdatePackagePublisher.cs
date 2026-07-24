@@ -24,20 +24,20 @@ public sealed class UpdatePackagePublisher
 {
     private const string Repository = "XlionHz/clonar-dc";
     private const string ApiRoot = "https://api.github.com/repos/" + Repository;
+    private const string InstallerAssetName = "GuildSync-Setup.exe";
+    private const string HashAssetName = "GuildSync-Setup.sha256";
     private readonly HttpClient _http;
 
     public UpdatePackagePublisher()
     {
         _http = new HttpClient { Timeout = TimeSpan.FromMinutes(30) };
-        _http.DefaultRequestHeaders.UserAgent.Add(new ProductInfoHeaderValue("ClonarDC-AdminPublisher", "1.0"));
-        _http.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/vnd.github+json"));
-        _http.DefaultRequestHeaders.Add("X-GitHub-Api-Version", "2022-11-28");
+        ConfigureHeaders(_http);
     }
 
     public async Task<UpdatePackageInfo> InspectAsync(string packagePath, CancellationToken cancellationToken = default)
     {
         if (!File.Exists(packagePath))
-            throw new FileNotFoundException("The selected update package was not found.", packagePath);
+            throw new FileNotFoundException("The selected GuildSync update package was not found.", packagePath);
 
         await using var file = new FileStream(packagePath, FileMode.Open, FileAccess.Read, FileShare.Read, 81920, true);
         using var archive = new ZipArchive(file, ZipArchiveMode.Read, leaveOpen: true);
@@ -55,15 +55,17 @@ public sealed class UpdatePackagePublisher
         }
 
         if (manifest.FormatVersion != 1)
-            throw new InvalidOperationException("This update package format is not supported.");
+            throw new InvalidOperationException("This GuildSync update package format is not supported.");
         if (!Version.TryParse(manifest.Version, out var version) || version.Major < 0)
             throw new InvalidOperationException("The package version is invalid.");
 
         var current = Assembly.GetExecutingAssembly().GetName().Version ?? new Version(0, 0, 0, 0);
         if (version <= new Version(current.Major, current.Minor, Math.Max(0, current.Build)))
-            throw new InvalidOperationException($"The package version ({version}) must be newer than the installed app ({current.Major}.{current.Minor}.{current.Build}).");
+            throw new InvalidOperationException($"The package version ({version}) must be newer than the installed GuildSync version ({current.Major}.{current.Minor}.{current.Build}).");
 
-        var setupName = string.IsNullOrWhiteSpace(manifest.SetupFile) ? "Clonar-DC-Setup.exe" : Path.GetFileName(manifest.SetupFile);
+        var setupName = string.IsNullOrWhiteSpace(manifest.SetupFile)
+            ? InstallerAssetName
+            : Path.GetFileName(manifest.SetupFile);
         var setupEntry = archive.Entries.FirstOrDefault(entry =>
             Path.GetFileName(entry.FullName).Equals(setupName, StringComparison.OrdinalIgnoreCase));
         if (setupEntry is null)
@@ -80,14 +82,14 @@ public sealed class UpdatePackagePublisher
         }
 
         if (!actualHash.Equals(expectedHash, StringComparison.OrdinalIgnoreCase))
-            throw new InvalidOperationException("The installer inside the package failed SHA-256 verification.");
+            throw new InvalidOperationException("The GuildSync installer inside the package failed SHA-256 verification.");
 
         var tag = string.IsNullOrWhiteSpace(manifest.Tag) ? $"v{version}" : manifest.Tag.Trim();
         if (!Regex.IsMatch(tag, @"^v?\d+\.\d+\.\d+(?:[-.][A-Za-z0-9.-]+)?$"))
             throw new InvalidOperationException("The release tag in the package is invalid.");
 
-        var title = string.IsNullOrWhiteSpace(manifest.Title) ? $"Clonar DC {version}" : manifest.Title.Trim();
-        var notes = string.IsNullOrWhiteSpace(manifest.Notes) ? "Clonar DC update." : manifest.Notes.Trim();
+        var title = string.IsNullOrWhiteSpace(manifest.Title) ? $"GuildSync {version}" : manifest.Title.Trim();
+        var notes = string.IsNullOrWhiteSpace(manifest.Notes) ? "GuildSync update." : manifest.Notes.Trim();
 
         return new UpdatePackageInfo(packagePath, version, tag, title, notes, setupEntry.FullName, actualHash, setupEntry.Length);
     }
@@ -139,10 +141,10 @@ public sealed class UpdatePackagePublisher
             await UploadInstallerAsync(client, uploadUrl, package, cancellationToken);
 
             progress?.Report("Uploading the SHA-256 verification file…");
-            var shaText = package.Sha256 + "  Clonar-DC-Setup.exe\n";
+            var shaText = package.Sha256 + "  " + InstallerAssetName + "\n";
             using (var shaContent = new StringContent(shaText, Encoding.UTF8, "text/plain"))
             {
-                await UploadAssetAsync(client, uploadUrl, "Clonar-DC-Setup.sha256", shaContent, cancellationToken);
+                await UploadAssetAsync(client, uploadUrl, HashAssetName, shaContent, cancellationToken);
             }
 
             progress?.Report("Publishing the release to all installations…");
@@ -163,7 +165,7 @@ public sealed class UpdatePackagePublisher
             if (releaseId is not null)
             {
                 try { await client.DeleteAsync($"{ApiRoot}/releases/{releaseId}", CancellationToken.None); }
-                catch { /* Best-effort cleanup of an incomplete draft. */ }
+                catch { }
             }
             throw;
         }
@@ -172,11 +174,16 @@ public sealed class UpdatePackagePublisher
     private static HttpClient CreateAuthorizedClient(string token)
     {
         var client = new HttpClient { Timeout = TimeSpan.FromMinutes(30) };
-        client.DefaultRequestHeaders.UserAgent.Add(new ProductInfoHeaderValue("ClonarDC-AdminPublisher", "1.0"));
-        client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/vnd.github+json"));
-        client.DefaultRequestHeaders.Add("X-GitHub-Api-Version", "2022-11-28");
+        ConfigureHeaders(client);
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
         return client;
+    }
+
+    private static void ConfigureHeaders(HttpClient client)
+    {
+        client.DefaultRequestHeaders.UserAgent.Add(new ProductInfoHeaderValue("GuildSync-AdminPublisher", "1.0"));
+        client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/vnd.github+json"));
+        client.DefaultRequestHeaders.Add("X-GitHub-Api-Version", "2022-11-28");
     }
 
     private static async Task EnsurePackageIsNewerThanLatestAsync(HttpClient client, Version packageVersion, CancellationToken cancellationToken)
@@ -204,12 +211,12 @@ public sealed class UpdatePackagePublisher
         await using var file = new FileStream(package.PackagePath, FileMode.Open, FileAccess.Read, FileShare.Read, 81920, true);
         using var archive = new ZipArchive(file, ZipArchiveMode.Read, leaveOpen: true);
         var entry = archive.GetEntry(package.SetupEntryName)
-                    ?? throw new InvalidOperationException("The installer disappeared from the update package.");
+                    ?? throw new InvalidOperationException("The GuildSync installer disappeared from the update package.");
         await using var stream = entry.Open();
         using var content = new StreamContent(stream, 81920);
         content.Headers.ContentType = new MediaTypeHeaderValue("application/octet-stream");
         content.Headers.ContentLength = entry.Length;
-        await UploadAssetAsync(client, uploadUrl, "Clonar-DC-Setup.exe", content, cancellationToken);
+        await UploadAssetAsync(client, uploadUrl, InstallerAssetName, content, cancellationToken);
     }
 
     private static async Task UploadAssetAsync(HttpClient client, string uploadUrl, string assetName, HttpContent content, CancellationToken cancellationToken)
