@@ -24,7 +24,7 @@ public sealed class UpdateService
     public UpdateService()
     {
         _http = new HttpClient { Timeout = TimeSpan.FromMinutes(8) };
-        _http.DefaultRequestHeaders.UserAgent.Add(new ProductInfoHeaderValue("ClonarDC", CurrentVersion.ToString()));
+        _http.DefaultRequestHeaders.UserAgent.Add(new ProductInfoHeaderValue("GuildSync", CurrentVersion.ToString()));
         _http.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/vnd.github+json"));
         _http.DefaultRequestHeaders.Add("X-GitHub-Api-Version", "2022-11-28");
     }
@@ -38,20 +38,18 @@ public sealed class UpdateService
 
         await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
         var release = await JsonSerializer.DeserializeAsync<GitHubRelease>(stream, JsonOptions, cancellationToken)
-            ?? throw new InvalidOperationException("O servidor de atualizações retornou uma resposta inválida.");
+            ?? throw new InvalidOperationException("The update server returned an invalid response.");
 
         var version = ParseVersion(release.TagName)
-            ?? throw new InvalidOperationException("A versão publicada não pôde ser interpretada.");
+            ?? throw new InvalidOperationException("The published GuildSync version could not be interpreted.");
 
         if (version <= CurrentVersion) return null;
 
-        var setup = release.Assets.FirstOrDefault(a =>
-            a.Name.Equals("Clonar-DC-Setup.exe", StringComparison.OrdinalIgnoreCase));
-        var sha = release.Assets.FirstOrDefault(a =>
-            a.Name.Equals("Clonar-DC-Setup.sha256", StringComparison.OrdinalIgnoreCase));
+        var setup = FindAsset(release.Assets, "GuildSync-Setup.exe", "Clonar-DC-Setup.exe");
+        var sha = FindAsset(release.Assets, "GuildSync-Setup.sha256", "Clonar-DC-Setup.sha256");
 
         if (setup is null || sha is null)
-            throw new InvalidOperationException("A publicação mais recente não contém o instalador e o SHA-256 necessários.");
+            throw new InvalidOperationException("The latest GuildSync release does not contain the required installer and SHA-256 file.");
 
         return new UpdateInfo(
             version,
@@ -69,12 +67,12 @@ public sealed class UpdateService
     {
         var updateDirectory = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "Clonar DC",
+            "GuildSync",
             "updates",
             update.Tag.Replace('/', '-'));
         Directory.CreateDirectory(updateDirectory);
 
-        var setupPath = Path.Combine(updateDirectory, "Clonar-DC-Setup.exe");
+        var setupPath = Path.Combine(updateDirectory, "GuildSync-Setup.exe");
         var temporaryPath = setupPath + ".download";
 
         using (var response = await _http.GetAsync(update.SetupUrl, HttpCompletionOption.ResponseHeadersRead, cancellationToken))
@@ -99,14 +97,14 @@ public sealed class UpdateService
         var shaText = await _http.GetStringAsync(update.Sha256Url, cancellationToken);
         var expectedHash = Regex.Match(shaText, "[A-Fa-f0-9]{64}").Value.ToUpperInvariant();
         if (expectedHash.Length != 64)
-            throw new InvalidOperationException("O arquivo de verificação da atualização é inválido.");
+            throw new InvalidOperationException("The GuildSync update verification file is invalid.");
 
         await using var file = File.OpenRead(temporaryPath);
         var actualHash = Convert.ToHexString(await SHA256.HashDataAsync(file, cancellationToken));
         if (!actualHash.Equals(expectedHash, StringComparison.OrdinalIgnoreCase))
         {
             File.Delete(temporaryPath);
-            throw new InvalidOperationException("A atualização baixada falhou na verificação de integridade.");
+            throw new InvalidOperationException("The downloaded GuildSync update failed integrity verification.");
         }
 
         File.Move(temporaryPath, setupPath, true);
@@ -117,7 +115,7 @@ public sealed class UpdateService
     public static void LaunchInstaller(string setupPath)
     {
         if (!File.Exists(setupPath))
-            throw new FileNotFoundException("O instalador baixado não foi encontrado.", setupPath);
+            throw new FileNotFoundException("The downloaded GuildSync installer was not found.", setupPath);
 
         Process.Start(new ProcessStartInfo
         {
@@ -127,6 +125,10 @@ public sealed class UpdateService
             WorkingDirectory = Path.GetDirectoryName(setupPath)!
         });
     }
+
+    private static GitHubAsset? FindAsset(IEnumerable<GitHubAsset> assets, params string[] names) =>
+        names.Select(name => assets.FirstOrDefault(asset => asset.Name.Equals(name, StringComparison.OrdinalIgnoreCase)))
+            .FirstOrDefault(asset => asset is not null);
 
     private static Version? ParseVersion(string tag)
     {
