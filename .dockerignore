@@ -1,0 +1,15 @@
+.git
+.github
+.vs
+.vscode
+**/bin
+**/obj
+out
+build-status
+*.user
+*.suo
+*.pdb
+*.log
+*.zip
+*.exe
+*.clonardc-update
