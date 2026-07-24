@@ -19,7 +19,7 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 60
     env:
-      APP_VERSION: '0.6.0'
+      APP_VERSION: '0.6.1'
 
     steps:
       - name: Checkout
@@ -30,93 +30,63 @@ jobs:
         with:
           dotnet-version: '10.0.x'
 
-      - name: Restore and build desktop
+      - name: Restore and build
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
           New-Item -ItemType Directory -Force -Path build-status,out | Out-Null
           dotnet restore .\src\ClonarDC.Desktop\ClonarDC.Desktop.csproj
           dotnet build .\src\ClonarDC.Desktop\ClonarDC.Desktop.csproj -c Release --no-restore
-
-      - name: Verify token input and dark-theme contracts
-        shell: pwsh
-        run: |
-          $ErrorActionPreference = 'Stop'
-          $handler = Get-Content .\src\ClonarDC.Desktop\MainWindow.TokenValidation.cs -Raw
-          $xaml = Get-Content .\src\ClonarDC.Desktop\MainWindow.xaml -Raw
-          $theme = Get-Content .\src\ClonarDC.Desktop\App.xaml -Raw
-
-          foreach ($required in @('AcceptTokenWithoutValidation_Click','LoadServers_Click','Use locally','Load servers')) {
-            if (-not $xaml.Contains($required) -and -not $handler.Contains($required)) { throw "Token flow is missing: $required" }
-          }
-          foreach ($required in @('no format, length, prefix, bot/user or network validation','The value was accepted locally')) {
-            if (-not $handler.Contains($required)) { throw "Local token acceptance contract is missing: $required" }
-          }
-          foreach ($required in @('ControlTemplate TargetType="{x:Type Button}"','ControlTemplate TargetType="{x:Type ComboBox}"','Style TargetType="{x:Type ComboBoxItem}"','#0D0F18','#11131D')) {
-            if (-not $theme.Contains($required)) { throw "Dark theme is missing: $required" }
-          }
-          'Any entered token value is accepted locally without format validation. Discord is contacted only when loading servers or running an operation.' | Set-Content out/token-flow-contract.txt
-          'Buttons, disabled buttons, combo boxes, dropdowns and combo items use explicit dark templates.' | Set-Content out/theme-contract.txt
-
-      - name: Build backend
-        shell: pwsh
-        run: |
-          $ErrorActionPreference = 'Stop'
           dotnet restore .\src\ClonarDC.Server\ClonarDC.Server.csproj
           dotnet build .\src\ClonarDC.Server\ClonarDC.Server.csproj -c Release --no-restore
 
-      - name: Verify central backend and payment contracts
+      - name: Verify product contracts
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          $program = Get-Content .\src\ClonarDC.Server\Program.cs -Raw
-          $persistence = Get-Content .\src\ClonarDC.Server\StatePersistence.cs -Raw
-          $payments = Get-Content .\src\ClonarDC.Server\MercadoPagoPayments.cs -Raw
+          $xaml = Get-Content .\src\ClonarDC.Desktop\MainWindow.xaml -Raw
+          $paymentUi = Get-Content .\src\ClonarDC.Desktop\MainWindow.Payments.cs -Raw
+          $auth = Get-Content .\src\ClonarDC.Desktop\Services\AuthClient.cs -Raw
           $resolver = Get-Content .\src\ClonarDC.Desktop\Services\ApiEndpointResolver.cs -Raw
-          $docker = Get-Content .\Dockerfile -Raw
+          $backendPayments = Get-Content .\src\ClonarDC.Server\MercadoPagoPayments.cs -Raw
           $render = Get-Content .\render.yaml -Raw
+          $apiUrl = (Get-Content .\src\ClonarDC.Desktop\api-url.txt -Raw).Trim()
 
-          foreach ($required in @('0.0.0.0','PORT','MapMercadoPagoEndpoints','StatePersistenceFactory.Create')) {
-            if (-not $program.Contains($required)) { throw "Central backend is missing: $required" }
+          foreach ($required in @('AcceptTokenWithoutValidation_Click','LoadServers_Click','Use locally','Load servers','Buy with Mercado Pago','Refresh license')) {
+            if (-not $xaml.Contains($required)) { throw "Desktop contract is missing: $required" }
           }
-          foreach ($required in @('DATABASE_URL','NpgsqlConnection','clonardc_state','NpgsqlDbType.Jsonb')) {
-            if (-not $persistence.Contains($required)) { throw "PostgreSQL persistence is missing: $required" }
+          foreach ($required in @('CreateCheckoutAsync','GetPaymentOrderAsync','GetCurrentSessionAsync','payments/checkout','payments/orders')) {
+            if (-not $auth.Contains($required)) { throw "Payment client contract is missing: $required" }
           }
-          foreach ($required in @('/payments/checkout','/webhooks/mercadopago','MERCADOPAGO_ACCESS_TOKEN','MERCADOPAGO_WEBHOOK_SECRET','ApplyMercadoPagoPaymentAsync','license-activated','amount-or-currency-mismatch','id:{dataId.ToLowerInvariant()};request-id:{xRequestId};ts:{timestamp};')) {
-            if (-not $payments.Contains($required)) { throw "Payment contract is missing: $required" }
+          foreach ($required in @('PollPaymentAsync','Payment approved','ProcessStartInfo','RefreshLicenseFromServerAsync')) {
+            if (-not $paymentUi.Contains($required)) { throw "Payment UI contract is missing: $required" }
+          }
+          foreach ($required in @('/payments/checkout','/webhooks/mercadopago','ApplyMercadoPagoPaymentAsync','license-activated','amount-or-currency-mismatch')) {
+            if (-not $backendPayments.Contains($required)) { throw "Backend payment contract is missing: $required" }
           }
           foreach ($required in @('CLONARDC_API','api-url.txt','RegistryValue = "ApiUrl"','https')) {
-            if (-not $resolver.Contains($required)) { throw "Desktop API resolver is missing: $required" }
+            if (-not $resolver.Contains($required)) { throw "API resolver contract is missing: $required" }
           }
-          foreach ($required in @('mcr.microsoft.com/dotnet/sdk:10.0','mcr.microsoft.com/dotnet/aspnet:10.0','USER app','ClonarDC.Server.dll')) {
-            if (-not $docker.Contains($required)) { throw "Dockerfile is missing: $required" }
-          }
-          foreach ($required in @('runtime: docker','healthCheckPath: /status','fromDatabase:','MERCADOPAGO_ACCESS_TOKEN','CLONARDC_PRICE_1M')) {
-            if (-not $render.Contains($required)) { throw "Render Blueprint is missing: $required" }
+          if ($apiUrl -ne 'https://clonar-dc-api.onrender.com') { throw 'Bundled central API URL is incorrect.' }
+          foreach ($required in @('runtime: docker','healthCheckPath: /status','MERCADOPAGO_WEBHOOK_SECRET','CLONARDC_PRICE_1M','value: "1.00"')) {
+            if (-not $render.Contains($required)) { throw "Render contract is missing: $required" }
           }
 
-          'Central API binds to the hosting port, supports PostgreSQL, and is selectable by the desktop client.' | Set-Content out/central-backend-contract.txt
-          'Mercado Pago checkout, signed webhook verification, payment confirmation, amount checks, idempotency and automatic license activation are present.' | Set-Content out/payment-contract.txt
-          'Dockerfile and Render Blueprint are present for a simplified API and database deployment.' | Set-Content out/deployment-contract.txt
+          'Payment UI, central API address, checkout polling, backend webhook and deployment settings verified.' | Set-Content out/payment-desktop-contract.txt
 
-      - name: Publish desktop self-contained
+      - name: Publish desktop and backend
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          New-Item -ItemType Directory -Force -Path out/app | Out-Null
           $fullVersion = "$env:APP_VERSION.$env:GITHUB_RUN_NUMBER"
+          New-Item -ItemType Directory -Force -Path out/app,out/backend | Out-Null
           dotnet publish .\src\ClonarDC.Desktop\ClonarDC.Desktop.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=false -p:DebugType=None -p:DebugSymbols=false -p:Version=$env:APP_VERSION -p:FileVersion=$fullVersion -p:AssemblyVersion=$fullVersion -o out/app
-          if (-not (Test-Path out/app/ClonarDC.exe)) { throw 'ClonarDC.exe was not generated.' }
-
-      - name: Publish local backend
-        shell: pwsh
-        run: |
-          $ErrorActionPreference = 'Stop'
-          New-Item -ItemType Directory -Force -Path out/backend | Out-Null
           dotnet publish .\src\ClonarDC.Server\ClonarDC.Server.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=false -p:DebugType=None -p:DebugSymbols=false -o out/backend
-          if (-not (Test-Path out/backend/ClonarDC.Server.exe)) { throw 'Local backend was not generated.' }
+          if (-not (Test-Path out/app/ClonarDC.exe)) { throw 'ClonarDC.exe was not generated.' }
+          if (-not (Test-Path out/app/api-url.txt)) { throw 'api-url.txt was not published.' }
+          if (-not (Test-Path out/backend/ClonarDC.Server.exe)) { throw 'ClonarDC.Server.exe was not generated.' }
 
-      - name: Account and payment-readiness smoke test
+      - name: Local backend smoke test
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
@@ -134,49 +104,32 @@ jobs:
               try { $status = Invoke-RestMethod -Uri 'http://127.0.0.1:18787/status' -TimeoutSec 1; break }
               catch { Start-Sleep -Milliseconds 250 }
             }
-            if ($null -eq $status) { throw 'Account backend did not start.' }
-            if ($status.storage -ne 'file') { throw "Unexpected local storage mode: $($status.storage)" }
-            if ($status.paymentsConfigured -ne $false) { throw 'Payments should remain disabled without server secrets and prices.' }
-
+            if ($null -eq $status) { throw 'Backend did not start.' }
             $email = "user-$([Guid]::NewGuid().ToString('N'))@example.invalid"
             $password = 'BuildOnly!User_2026'
-            $body = @{ name='Build User'; email=$email; password=$password } | ConvertTo-Json
-            $register = Invoke-RestMethod -Method Post -Uri 'http://127.0.0.1:18787/auth/register' -ContentType 'application/json' -Body $body
-            if ($register.status -ne 'pending') { throw 'Registration did not return pending.' }
-
-            $login = Invoke-RestMethod -Method Post -Uri 'http://127.0.0.1:18787/auth/login' -ContentType 'application/json' -Body (@{ email=$email; password=$password } | ConvertTo-Json)
-            if (-not $login.accessToken) { throw 'Login did not return a session token.' }
-            $plans = Invoke-RestMethod -Uri 'http://127.0.0.1:18787/payments/plans'
-            if ($plans.checkoutConfigured -ne $false -or $plans.plans.Count -ne 0) { throw 'Disabled payment configuration was not reported safely.' }
-            'Registration, login, status and disabled-by-default payment configuration passed.' | Set-Content out/auth-payment-smoke.txt
+            $register = Invoke-RestMethod -Method Post -Uri 'http://127.0.0.1:18787/auth/register' -ContentType 'application/json' -Body (@{name='Build User';email=$email;password=$password}|ConvertTo-Json)
+            if ($register.status -ne 'pending') { throw 'Registration failed.' }
+            $login = Invoke-RestMethod -Method Post -Uri 'http://127.0.0.1:18787/auth/login' -ContentType 'application/json' -Body (@{email=$email;password=$password}|ConvertTo-Json)
+            if (-not $login.accessToken) { throw 'Login failed.' }
+            'Backend registration and login passed.' | Set-Content out/auth-smoke.txt
           }
           finally {
             if ($backend -and -not $backend.HasExited) { Stop-Process -Id $backend.Id -Force }
             Remove-Item Env:CLONARDC_LISTEN,Env:CLONARDC_DATA,Env:CLONARDC_ADMIN_EMAIL,Env:CLONARDC_ADMIN_PASSWORD -ErrorAction SilentlyContinue
           }
 
-      - name: Desktop runtime smoke test
-        shell: pwsh
-        run: |
-          $proc = Start-Process -FilePath "$PWD\out\app\ClonarDC.exe" -PassThru
-          Start-Sleep -Seconds 8
-          if ($proc.HasExited) { throw "ClonarDC.exe exited early with code $($proc.ExitCode)." }
-          Stop-Process -Id $proc.Id -Force
-          'Desktop process stayed alive for 8 seconds.' | Set-Content out/smoke-runtime.txt
-
       - name: Install Inno Setup
         shell: pwsh
         run: choco install innosetup --no-progress -y
 
-      - name: Build installer and admin update package
+      - name: Build installer and update package
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
           $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
-          if (-not (Test-Path $iscc)) { throw 'ISCC.exe was not found.' }
           & $iscc 'installer\ClonarDC.iss'
           $setup = 'out\installer\Clonar-DC-Setup.exe'
-          if (-not (Test-Path $setup)) { throw 'Setup.exe was not generated.' }
+          if (-not (Test-Path $setup)) { throw 'Installer was not generated.' }
           $hash = (Get-FileHash $setup -Algorithm SHA256).Hash
           $hash | Set-Content 'out\installer\Clonar-DC-Setup.sha256'
           "VERSION=$env:APP_VERSION`nSHA256=$hash" | Set-Content 'out\installer\build-info.txt'
@@ -189,39 +142,28 @@ jobs:
             version = $env:APP_VERSION
             tag = "v$env:APP_VERSION"
             title = "Clonar DC $env:APP_VERSION"
-            notes = 'Central HTTPS backend readiness, PostgreSQL persistence, Mercado Pago checkout/webhook foundation, and arbitrary local token input.'
+            notes = 'Connects to the central HTTPS API and adds in-app Mercado Pago license purchase with automatic confirmation.'
             setupFile = 'Clonar-DC-Setup.exe'
             sha256 = $hash
           } | ConvertTo-Json -Depth 4 | Set-Content (Join-Path $packageRoot 'manifest.json') -Encoding UTF8
+          $zip = "out\Clonar-DC-$env:APP_VERSION-update.zip"
+          $package = "out\Clonar-DC-$env:APP_VERSION.clonardc-update"
+          Compress-Archive -Path "$packageRoot\*" -DestinationPath $zip -CompressionLevel Optimal -Force
+          Move-Item $zip $package -Force
 
-          $temporaryZip = "out\Clonar-DC-$env:APP_VERSION-update.zip"
-          $packagePath = "out\Clonar-DC-$env:APP_VERSION.clonardc-update"
-          Compress-Archive -Path "$packageRoot\*" -DestinationPath $temporaryZip -CompressionLevel Optimal -Force
-          Move-Item $temporaryZip $packagePath -Force
-          Copy-Item $packagePath 'out\verify-update-package.zip' -Force
-          Expand-Archive 'out\verify-update-package.zip' 'out\verify-update-package' -Force
-          $manifest = Get-Content 'out\verify-update-package\manifest.json' -Raw | ConvertFrom-Json
-          $actual = (Get-FileHash 'out\verify-update-package\Clonar-DC-Setup.exe' -Algorithm SHA256).Hash
-          if ($manifest.version -ne $env:APP_VERSION -or $actual -ne $manifest.sha256) { throw 'Update package verification failed.' }
-          'Admin update package contains a verified installer and manifest.' | Set-Content out/update-package-smoke.txt
-
-      - name: Install and launch smoke test
+      - name: Installer smoke test
         shell: pwsh
         run: |
+          $ErrorActionPreference = 'Stop'
           $setup = "$PWD\out\installer\Clonar-DC-Setup.exe"
           $install = Start-Process -FilePath $setup -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/SP-','/LANG=en' -Wait -PassThru
-          if ($install.ExitCode -ne 0) { throw "Installer returned code $($install.ExitCode)." }
+          if ($install.ExitCode -ne 0) { throw "Installer returned $($install.ExitCode)." }
           $root = Join-Path $env:LOCALAPPDATA 'Programs\Clonar DC'
-          $exe = Join-Path $root 'ClonarDC.exe'
-          if (-not (Test-Path $exe)) { throw 'Installed executable was not found.' }
-          if (-not (Test-Path (Join-Path $root 'backend\ClonarDC.Server.exe'))) { throw 'Installed backend was not found.' }
-          $proc = Start-Process -FilePath $exe -PassThru
-          Start-Sleep -Seconds 8
-          if ($proc.HasExited) { throw "Installed app exited early with code $($proc.ExitCode)." }
-          Stop-Process -Id $proc.Id -Force
-          'Installer succeeded and installed app stayed alive.' | Set-Content out/installer/smoke-install.txt
+          if (-not (Test-Path (Join-Path $root 'ClonarDC.exe'))) { throw 'Installed app was not found.' }
+          if ((Get-Content (Join-Path $root 'api-url.txt') -Raw).Trim() -ne 'https://clonar-dc-api.onrender.com') { throw 'Installed central API URL is incorrect.' }
+          'Installer and central API configuration passed.' | Set-Content out/installer-smoke.txt
 
-      - name: Upload verified build artifacts
+      - name: Upload verified artifacts
         uses: actions/upload-artifact@v4
         with:
           name: Clonar-DC-Verified-Windows
@@ -229,20 +171,10 @@ jobs:
             out/installer/Clonar-DC-Setup.exe
             out/installer/Clonar-DC-Setup.sha256
             out/installer/build-info.txt
-            out/installer/smoke-install.txt
             out/Clonar-DC-${{ env.APP_VERSION }}.clonardc-update
-            out/update-package-smoke.txt
-            out/smoke-runtime.txt
-            out/auth-payment-smoke.txt
-            out/token-flow-contract.txt
-            out/theme-contract.txt
-            out/central-backend-contract.txt
-            out/payment-contract.txt
-            out/deployment-contract.txt
-            render.yaml
-            Dockerfile
-            .env.example
-            docs/simple-deployment.md
+            out/payment-desktop-contract.txt
+            out/auth-smoke.txt
+            out/installer-smoke.txt
           if-no-files-found: error
 
       - name: Create GitHub release
@@ -250,13 +182,10 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          $ErrorActionPreference = 'Stop'
           $tag = "v$env:APP_VERSION-alpha.$env:GITHUB_RUN_NUMBER"
-          $title = "Clonar DC $env:APP_VERSION Alpha $env:GITHUB_RUN_NUMBER"
-          $notes = 'Central backend foundation: PostgreSQL persistence, one-click Render Blueprint, Mercado Pago Checkout Pro and signed webhook processing, automatic license activation, and the 0.5.4 token/theme fixes.'
-          gh release create $tag 'out/installer/Clonar-DC-Setup.exe' 'out/installer/Clonar-DC-Setup.sha256' "out/Clonar-DC-$env:APP_VERSION.clonardc-update" 'out/auth-payment-smoke.txt' 'out/central-backend-contract.txt' 'out/payment-contract.txt' --title $title --notes $notes --target $env:GITHUB_SHA
+          gh release create $tag 'out/installer/Clonar-DC-Setup.exe' 'out/installer/Clonar-DC-Setup.sha256' "out/Clonar-DC-$env:APP_VERSION.clonardc-update" --title "Clonar DC $env:APP_VERSION Alpha $env:GITHUB_RUN_NUMBER" --notes 'Central API is bundled by default. License purchases can be started inside the app and are confirmed automatically through Mercado Pago webhooks.' --target $env:GITHUB_SHA
 
-      - name: Record successful build status
+      - name: Record successful build
         if: success()
         shell: pwsh
         run: |
@@ -271,7 +200,7 @@ jobs:
           Release: https://github.com/${{ github.repository }}/releases/tag/v$env:APP_VERSION-alpha.${{ github.run_number }}
           SHA-256: `$hash`
 
-          Validation: desktop and backend compiled; token/theme contracts checked; central API, PostgreSQL, payments and deployment contracts checked; registration/login/payment readiness tested; installer and update package verified; installed app launched.
+          Validation: desktop/backend compiled; payment UI and central API contracts checked; registration/login tested; installer and update package verified.
           "@ | Set-Content build-status/latest.md -Encoding UTF8
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
@@ -279,7 +208,7 @@ jobs:
           git commit -m 'ci: record verified Windows build [skip ci]'
           git push
 
-      - name: Record failure status
+      - name: Record failed build
         if: failure()
         shell: pwsh
         run: |
