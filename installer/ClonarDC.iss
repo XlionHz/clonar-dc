@@ -1,5 +1,5 @@
 #define MyAppName "GuildSync"
-#define MyAppVersion "0.6.1"
+#define MyAppVersion "0.7.0"
 #define MyAppPublisher "GuildSync"
 #define MyAppExeName "ClonarDC.exe"
 
@@ -17,7 +17,7 @@ OutputBaseFilename=GuildSync-Setup
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
-SetupIconFile=..\src\ClonarDC.Desktop\Assets\ClonarDC.ico
+SetupIconFile=..\src\ClonarDC.Desktop\Assets\GuildSync.ico
 UninstallDisplayIcon={app}\{#MyAppExeName}
 UninstallDisplayName=GuildSync
 ArchitecturesAllowed=x64compatible
