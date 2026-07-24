@@ -1,0 +1,50 @@
+name: Backend Compile Diagnostic
+
+on:
+  push:
+    branches: [ main ]
+    paths-ignore:
+      - 'build-status/**'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: clonar-dc-backend-diagnostic
+  cancel-in-progress: true
+
+jobs:
+  compile:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - name: Compile backend and capture diagnostics
+        id: compile
+        shell: pwsh
+        continue-on-error: true
+        run: |
+          New-Item -ItemType Directory -Force -Path build-status | Out-Null
+          dotnet restore .\src\ClonarDC.Server\ClonarDC.Server.csproj 2>&1 | Tee-Object -FilePath build-status\backend-restore.log
+          $output = & dotnet build .\src\ClonarDC.Server\ClonarDC.Server.csproj -c Release --no-restore 2>&1
+          $code = $LASTEXITCODE
+          $output | Tee-Object -FilePath build-status\backend-build.log | Write-Host
+          $output | Select-Object -Last 240 | Set-Content build-status\backend-error.txt
+          "exit_code=$code" >> $env:GITHUB_OUTPUT
+      - name: Commit diagnostics
+        if: always()
+        shell: pwsh
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add build-status/backend-restore.log build-status/backend-build.log build-status/backend-error.txt
+          git commit -m 'ci: record backend compile diagnostics [skip ci]' || exit 0
+          git push || exit 0
+      - name: Fail when compilation failed
+        if: steps.compile.outputs.exit_code != '0'
+        shell: pwsh
+        run: throw 'Backend compilation failed; diagnostics were committed.'
