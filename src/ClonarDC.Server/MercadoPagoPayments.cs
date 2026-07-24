@@ -34,11 +34,11 @@ static class MercadoPagoEndpoints
             if (user is null) return Results.Unauthorized();
 
             if (!options.IsCheckoutConfigured)
-                return Results.Json(new { error = "Os pagamentos ainda não foram configurados no servidor." }, statusCode: 503);
+                return Results.Json(new { error = "GuildSync payments are not configured yet." }, statusCode: 503);
 
             var planCode = request.Plan?.Trim().ToLowerInvariant() ?? string.Empty;
             if (!options.Plans.TryGetValue(planCode, out var plan))
-                return Results.BadRequest(new { error = "Plano inválido ou sem preço configurado." });
+                return Results.BadRequest(new { error = "Invalid or unavailable GuildSync plan." });
 
             var order = await store.CreatePaymentOrderAsync(user.Id, plan);
             try
@@ -56,7 +56,7 @@ static class MercadoPagoEndpoints
             catch (Exception ex)
             {
                 await store.MarkPaymentOrderFailedAsync(order.Id, ex.Message);
-                return Results.Json(new { error = "Não foi possível iniciar o pagamento.", detail = ex.Message }, statusCode: 502);
+                return Results.Json(new { error = "GuildSync could not start the payment." }, statusCode: 502);
             }
         });
 
@@ -66,7 +66,7 @@ static class MercadoPagoEndpoints
             if (user is null) return Results.Unauthorized();
             var order = await store.GetPaymentOrderAsync(orderId, user.Id);
             return order is null
-                ? Results.NotFound(new { error = "Pedido não encontrado." })
+                ? Results.NotFound(new { error = "Payment order not found." })
                 : Results.Ok(new
                 {
                     order.Id,
@@ -102,12 +102,12 @@ static class MercadoPagoEndpoints
                 body?["type"]?.ToString());
 
             if (string.IsNullOrWhiteSpace(dataId))
-                return Results.BadRequest(new { error = "Notificação sem identificador do recurso." });
+                return Results.BadRequest(new { error = "Notification resource ID is missing." });
 
             if (!options.AllowUnsignedWebhooks)
             {
                 if (!options.IsWebhookConfigured)
-                    return Results.Json(new { error = "A assinatura do webhook ainda não foi configurada." }, statusCode: 503);
+                    return Results.Json(new { error = "The Mercado Pago webhook signature is not configured." }, statusCode: 503);
 
                 var signatureValid = MercadoPagoWebhookSignature.IsValid(
                     context.Request.Headers["x-signature"].ToString(),
@@ -128,21 +128,21 @@ static class MercadoPagoEndpoints
                     ? Results.Ok(new { received = true, status = payment.Status })
                     : Results.BadRequest(new { error = applied.Error });
             }
-            catch (Exception ex)
+            catch
             {
-                return Results.Json(new { error = "Não foi possível confirmar o pagamento no Mercado Pago.", detail = ex.Message }, statusCode: 502);
+                return Results.Json(new { error = "GuildSync could not confirm the payment with Mercado Pago." }, statusCode: 502);
             }
         });
 
         app.MapGet("/payments/success", () => PaymentReturnPage(
-            "Pagamento recebido",
-            "Estamos confirmando o pagamento com o Mercado Pago. A licença será liberada automaticamente assim que o status aprovado chegar ao servidor."));
+            "Payment received",
+            "GuildSync is confirming the payment with Mercado Pago. Your license will be activated automatically after the approved status reaches the server."));
         app.MapGet("/payments/pending", () => PaymentReturnPage(
-            "Pagamento pendente",
-            "O pagamento ainda está sendo processado. A licença será liberada automaticamente quando houver aprovação."));
+            "Payment pending",
+            "The payment is still processing. GuildSync will activate the license automatically after approval."));
         app.MapGet("/payments/failure", () => PaymentReturnPage(
-            "Pagamento não concluído",
-            "A cobrança não foi concluída. Você pode fechar esta página e tentar novamente pelo Clonar DC."));
+            "Payment not completed",
+            "The charge was not completed. You can close this page and try again from GuildSync."));
     }
 
     private static async Task<UserRecord?> AuthenticatePaymentUserAsync(HttpContext context, JsonStore store)
@@ -155,11 +155,11 @@ static class MercadoPagoEndpoints
     private static IResult PaymentReturnPage(string title, string message) => Results.Content(
         $"""
         <!doctype html>
-        <html lang="pt-BR">
-        <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{title} — Clonar DC</title></head>
+        <html lang="en">
+        <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{title} — GuildSync</title></head>
         <body style="margin:0;background:#0d0f18;color:#f5f3ff;font-family:Segoe UI,Arial,sans-serif;display:grid;min-height:100vh;place-items:center">
           <main style="max-width:620px;margin:24px;padding:32px;border:1px solid #302c46;border-radius:18px;background:#151724;box-shadow:0 24px 80px #0007">
-            <h1 style="margin-top:0">{title}</h1><p style="line-height:1.6;color:#c9c5dc">{message}</p><p style="color:#8b85a6">Você já pode voltar ao aplicativo.</p>
+            <h1 style="margin-top:0">{title}</h1><p style="line-height:1.6;color:#c9c5dc">{message}</p><p style="color:#8b85a6">You can now return to GuildSync.</p>
           </main>
         </body>
         </html>
@@ -171,7 +171,6 @@ static class MercadoPagoEndpoints
 }
 
 sealed record CheckoutRequest(string? Plan);
-
 sealed record PaymentPlan(string Code, string Name, decimal Price, string Currency = "BRL");
 
 sealed class MercadoPagoOptions
@@ -192,21 +191,24 @@ sealed class MercadoPagoOptions
 
     public static MercadoPagoOptions FromEnvironment()
     {
-        var environment = Environment.GetEnvironmentVariable("CLONARDC_ENV")?.Trim();
+        var environment = EnvironmentValue("GUILDSYNC_ENV", "CLONARDC_ENV");
         var sandboxSetting = Environment.GetEnvironmentVariable("MERCADOPAGO_USE_SANDBOX")?.Trim();
         var useSandbox = bool.TryParse(sandboxSetting, out var explicitSandbox)
             ? explicitSandbox
             : !string.Equals(environment, "production", StringComparison.OrdinalIgnoreCase);
 
+        var currency = EnvironmentValue("GUILDSYNC_PAYMENT_CURRENCY")?.ToUpperInvariant();
+        if (string.IsNullOrWhiteSpace(currency)) currency = "BRL";
+
         var plans = new Dictionary<string, PaymentPlan>(StringComparer.OrdinalIgnoreCase);
-        AddPlan(plans, "1m", "Clonar DC — 1 mês", "CLONARDC_PRICE_1M");
-        AddPlan(plans, "3m", "Clonar DC — 3 meses", "CLONARDC_PRICE_3M");
-        AddPlan(plans, "6m", "Clonar DC — 6 meses", "CLONARDC_PRICE_6M");
-        AddPlan(plans, "12m", "Clonar DC — 12 meses", "CLONARDC_PRICE_12M");
-        AddPlan(plans, "permanent", "Clonar DC — permanente", "CLONARDC_PRICE_PERMANENT");
+        AddPlan(plans, "1m", "GuildSync — 1 month", currency, "GUILDSYNC_PRICE_1M", "CLONARDC_PRICE_1M");
+        AddPlan(plans, "3m", "GuildSync — 3 months", currency, "GUILDSYNC_PRICE_3M", "CLONARDC_PRICE_3M");
+        AddPlan(plans, "6m", "GuildSync — 6 months", currency, "GUILDSYNC_PRICE_6M", "CLONARDC_PRICE_6M");
+        AddPlan(plans, "12m", "GuildSync — 12 months", currency, "GUILDSYNC_PRICE_12M", "CLONARDC_PRICE_12M");
+        AddPlan(plans, "permanent", "GuildSync — Permanent", currency, "GUILDSYNC_PRICE_PERMANENT", "CLONARDC_PRICE_PERMANENT");
 
         var publicUrl = FirstNonEmpty(
-            Environment.GetEnvironmentVariable("CLONARDC_PUBLIC_URL"),
+            EnvironmentValue("GUILDSYNC_PUBLIC_URL", "CLONARDC_PUBLIC_URL"),
             Environment.GetEnvironmentVariable("RENDER_EXTERNAL_URL"))?.TrimEnd('/') ?? string.Empty;
 
         return new MercadoPagoOptions
@@ -223,12 +225,22 @@ sealed class MercadoPagoOptions
         };
     }
 
-    private static void AddPlan(IDictionary<string, PaymentPlan> plans, string code, string name, string environmentKey)
+    private static void AddPlan(
+        IDictionary<string, PaymentPlan> plans,
+        string code,
+        string name,
+        string currency,
+        params string[] environmentKeys)
     {
-        var raw = Environment.GetEnvironmentVariable(environmentKey);
+        var raw = EnvironmentValue(environmentKeys);
         if (!decimal.TryParse(raw, NumberStyles.Number, CultureInfo.InvariantCulture, out var price) || price <= 0) return;
-        plans[code] = new PaymentPlan(code, name, decimal.Round(price, 2));
+        plans[code] = new PaymentPlan(code, name, decimal.Round(price, 2), currency);
     }
+
+    private static string? EnvironmentValue(params string[] keys) =>
+        keys.Select(Environment.GetEnvironmentVariable)
+            .FirstOrDefault(value => !string.IsNullOrWhiteSpace(value))
+            ?.Trim();
 
     private static string? FirstNonEmpty(params string?[] values) =>
         values.FirstOrDefault(value => !string.IsNullOrWhiteSpace(value));
@@ -246,7 +258,7 @@ sealed class MercadoPagoClient
     public MercadoPagoClient(MercadoPagoOptions options)
     {
         _options = options;
-        _http.DefaultRequestHeaders.UserAgent.ParseAdd("ClonarDC-Server/0.4");
+        _http.DefaultRequestHeaders.UserAgent.ParseAdd("GuildSync-Server/0.5");
     }
 
     public async Task<MercadoPagoPreference> CreatePreferenceAsync(
@@ -257,7 +269,7 @@ sealed class MercadoPagoClient
     {
         EnsureAccessToken();
         if (string.IsNullOrWhiteSpace(_options.PublicUrl))
-            throw new InvalidOperationException("CLONARDC_PUBLIC_URL não está configurada.");
+            throw new InvalidOperationException("GUILDSYNC_PUBLIC_URL is not configured.");
 
         var payload = new
         {
@@ -267,7 +279,7 @@ sealed class MercadoPagoClient
                 {
                     id = plan.Code,
                     title = plan.Name,
-                    description = "Licença digital do aplicativo Clonar DC",
+                    description = "GuildSync digital software license",
                     quantity = 1,
                     currency_id = plan.Currency,
                     unit_price = plan.Price
@@ -275,7 +287,7 @@ sealed class MercadoPagoClient
             },
             payer = new { email = user.Email },
             external_reference = order.Id,
-            statement_descriptor = "CLONARDC",
+            statement_descriptor = "GUILDSYNC",
             back_urls = new
             {
                 success = _options.PublicUrl + "/payments/success",
@@ -299,13 +311,13 @@ sealed class MercadoPagoClient
         if (!response.IsSuccessStatusCode)
             throw new InvalidOperationException(MercadoPagoError(response.StatusCode, raw));
 
-        var node = JsonNode.Parse(raw) ?? throw new InvalidOperationException("O Mercado Pago retornou uma resposta vazia.");
+        var node = JsonNode.Parse(raw) ?? throw new InvalidOperationException("Mercado Pago returned an empty response.");
         var preferenceId = node["id"]?.GetValue<string>()
-                           ?? throw new InvalidOperationException("O Mercado Pago não retornou o ID da preferência.");
+                           ?? throw new InvalidOperationException("Mercado Pago did not return the preference ID.");
         var checkoutUrl = (_options.UseSandbox ? node["sandbox_init_point"] : node["init_point"])?.GetValue<string>()
                           ?? node["init_point"]?.GetValue<string>()
                           ?? node["sandbox_init_point"]?.GetValue<string>()
-                          ?? throw new InvalidOperationException("O Mercado Pago não retornou o link de pagamento.");
+                          ?? throw new InvalidOperationException("Mercado Pago did not return the checkout URL.");
         return new MercadoPagoPreference(preferenceId, checkoutUrl);
     }
 
@@ -318,7 +330,7 @@ sealed class MercadoPagoClient
         if (!response.IsSuccessStatusCode)
             throw new InvalidOperationException(MercadoPagoError(response.StatusCode, raw));
 
-        var node = JsonNode.Parse(raw) ?? throw new InvalidOperationException("O Mercado Pago retornou uma resposta vazia.");
+        var node = JsonNode.Parse(raw) ?? throw new InvalidOperationException("Mercado Pago returned an empty response.");
         return new MercadoPagoPayment(
             node["id"]?.ToString() ?? paymentId,
             node["status"]?.GetValue<string>() ?? "unknown",
@@ -339,7 +351,7 @@ sealed class MercadoPagoClient
     private void EnsureAccessToken()
     {
         if (string.IsNullOrWhiteSpace(_options.AccessToken))
-            throw new InvalidOperationException("MERCADOPAGO_ACCESS_TOKEN não está configurado no servidor.");
+            throw new InvalidOperationException("MERCADOPAGO_ACCESS_TOKEN is not configured on the server.");
     }
 
     private static string MercadoPagoError(System.Net.HttpStatusCode statusCode, string raw)
@@ -349,12 +361,12 @@ sealed class MercadoPagoClient
             var node = JsonNode.Parse(raw);
             var message = node?["message"]?.ToString() ?? node?["error"]?.ToString();
             return string.IsNullOrWhiteSpace(message)
-                ? $"Mercado Pago retornou HTTP {(int)statusCode}."
-                : $"Mercado Pago retornou HTTP {(int)statusCode}: {message}";
+                ? $"Mercado Pago returned HTTP {(int)statusCode}."
+                : $"Mercado Pago returned HTTP {(int)statusCode}: {message}";
         }
         catch
         {
-            return $"Mercado Pago retornou HTTP {(int)statusCode}.";
+            return $"Mercado Pago returned HTTP {(int)statusCode}.";
         }
     }
 }
@@ -429,7 +441,7 @@ sealed partial class JsonStore
         try
         {
             if (_db.Users.All(user => user.Id != userId))
-                throw new InvalidOperationException("Usuário não encontrado.");
+                throw new InvalidOperationException("GuildSync account not found.");
 
             var order = new PaymentOrderRecord
             {
@@ -456,7 +468,7 @@ sealed partial class JsonStore
         try
         {
             var order = _db.Payments.FirstOrDefault(item => item.Id == orderId)
-                        ?? throw new InvalidOperationException("Pedido não encontrado.");
+                        ?? throw new InvalidOperationException("Payment order not found.");
             order.PreferenceId = preferenceId;
             order.CheckoutUrl = checkoutUrl;
             order.Status = "checkout-created";
@@ -504,19 +516,19 @@ sealed partial class JsonStore
     public async Task<OpResult> ApplyMercadoPagoPaymentAsync(MercadoPagoPayment payment)
     {
         if (string.IsNullOrWhiteSpace(payment.ExternalReference))
-            return new(false, "Pagamento sem referência ao pedido do Clonar DC.");
+            return new(false, "Payment does not reference a GuildSync order.");
 
         await _gate.WaitAsync();
         try
         {
             var order = _db.Payments.FirstOrDefault(item => item.Id == payment.ExternalReference);
-            if (order is null) return new(false, "Pedido associado ao pagamento não foi encontrado.");
+            if (order is null) return new(false, "The payment order was not found.");
 
             var reusedPayment = _db.Payments.Any(item =>
                 item.Id != order.Id &&
                 !string.IsNullOrWhiteSpace(item.ProviderPaymentId) &&
                 item.ProviderPaymentId == payment.Id);
-            if (reusedPayment) return new(false, "Este pagamento já está associado a outro pedido.");
+            if (reusedPayment) return new(false, "This provider payment is already linked to another order.");
 
             order.ProviderPaymentId = payment.Id;
             order.ProviderStatusDetail = payment.StatusDetail;
@@ -530,13 +542,13 @@ sealed partial class JsonStore
                     order.Status = "amount-mismatch";
                     _db.Audit.Add(new(DateTimeOffset.UtcNow, "mercadopago", "payment-rejected", order.Id, "amount-or-currency-mismatch"));
                     await SaveUnsafeAsync();
-                    return new(false, "O valor ou a moeda do pagamento não corresponde ao pedido.");
+                    return new(false, "The payment amount or currency does not match the GuildSync order.");
                 }
 
                 if (!string.Equals(order.Status, "approved", StringComparison.OrdinalIgnoreCase))
                 {
                     var user = _db.Users.FirstOrDefault(item => item.Id == order.UserId);
-                    if (user is null) return new(false, "Usuário do pedido não foi encontrado.");
+                    if (user is null) return new(false, "The GuildSync account linked to the order was not found.");
                     ApplyLicense(user, order.PlanCode);
                     user.Status = "active";
                     order.Status = "approved";
