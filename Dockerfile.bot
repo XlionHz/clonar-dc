@@ -1,0 +1,13 @@
+FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
+WORKDIR /src
+COPY src/GuildSync.Bot/GuildSync.Bot.csproj src/GuildSync.Bot/
+RUN dotnet restore src/GuildSync.Bot/GuildSync.Bot.csproj
+COPY src/GuildSync.Bot/ src/GuildSync.Bot/
+RUN dotnet publish src/GuildSync.Bot/GuildSync.Bot.csproj -c Release -o /app/publish --no-restore
+
+FROM mcr.microsoft.com/dotnet/runtime:10.0 AS final
+WORKDIR /app
+RUN adduser --disabled-password --gecos "" --home /app guildsync && chown -R guildsync:guildsync /app
+USER guildsync
+COPY --from=build --chown=guildsync:guildsync /app/publish .
+ENTRYPOINT ["dotnet", "GuildSync.Bot.dll"]
