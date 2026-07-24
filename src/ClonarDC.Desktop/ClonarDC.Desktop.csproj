@@ -7,14 +7,18 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <AssemblyName>ClonarDC</AssemblyName>
     <RootNamespace>ClonarDC</RootNamespace>
-    <Version>0.6.0</Version>
-    <FileVersion>0.6.0.0</FileVersion>
-    <AssemblyVersion>0.6.0.0</AssemblyVersion>
+    <Version>0.6.1</Version>
+    <FileVersion>0.6.1.0</FileVersion>
+    <AssemblyVersion>0.6.1.0</AssemblyVersion>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <ApplicationIcon>Assets/ClonarDC.ico</ApplicationIcon>
   </PropertyGroup>
   <ItemGroup>
     <Resource Include="Assets/ClonarDCLogo.png" />
     <Resource Include="Assets/ClonarDC.ico" />
+    <Content Include="api-url.txt">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </Content>
   </ItemGroup>
 </Project>
