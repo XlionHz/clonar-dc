@@ -5,6 +5,9 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <AssemblyName>ClonarDC.Server</AssemblyName>
     <RootNamespace>ClonarDC.Server</RootNamespace>
-    <Version>0.3.0</Version>
+    <Version>0.4.0</Version>
   </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Npgsql" Version="10.0.3" />
+  </ItemGroup>
 </Project>
