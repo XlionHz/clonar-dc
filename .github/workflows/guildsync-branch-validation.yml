@@ -1,0 +1,50 @@
+name: GuildSync Branch Validation
+
+on:
+  push:
+    branches: [ guildsync-rebrand-bot ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: guildsync-branch-validation
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - name: Restore and build GuildSync components
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          dotnet restore .\src\ClonarDC.Desktop\ClonarDC.Desktop.csproj
+          dotnet build .\src\ClonarDC.Desktop\ClonarDC.Desktop.csproj -c Release --no-restore
+          dotnet restore .\src\ClonarDC.Server\ClonarDC.Server.csproj
+          dotnet build .\src\ClonarDC.Server\ClonarDC.Server.csproj -c Release --no-restore
+          dotnet restore .\src\GuildSync.Bot\GuildSync.Bot.csproj
+          dotnet build .\src\GuildSync.Bot\GuildSync.Bot.csproj -c Release --no-restore
+      - name: Verify brand and Discord contracts
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $main = Get-Content .\src\ClonarDC.Desktop\MainWindow.xaml -Raw
+          $login = Get-Content .\src\ClonarDC.Desktop\LoginWindow.xaml -Raw
+          $api = Get-Content .\src\ClonarDC.Server\DiscordIntegration.cs -Raw
+          $bot = Get-Content .\src\GuildSync.Bot\Program.cs -Raw
+          foreach ($required in @('GuildSync','GuildSyncLogo.png','Connect Discord','LinkDiscord_Click')) {
+            if (-not $main.Contains($required) -and -not $login.Contains($required)) { throw "Brand contract missing: $required" }
+          }
+          foreach ($required in @('/discord/link/claim','/discord/bot/link-code','/discord/bot/license','/discord/bot/checkout','FixedTimeSecretEquals')) {
+            if (-not $api.Contains($required)) { throw "Discord API contract missing: $required" }
+          }
+          foreach ($required in @('DISCORD_BOT_TOKEN','GUILDSYNC_BOT_API_KEY','SlashCommandExecuted','CreateGlobalApplicationCommandAsync','/link','/buy')) {
+            if (-not $bot.Contains($required)) { throw "Discord bot contract missing: $required" }
+          }
