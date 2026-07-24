@@ -1,6 +1,6 @@
-#define MyAppName "Clonar DC"
+#define MyAppName "GuildSync"
 #define MyAppVersion "0.6.1"
-#define MyAppPublisher "Clonar DC"
+#define MyAppPublisher "GuildSync"
 #define MyAppExeName "ClonarDC.exe"
 
 [Setup]
@@ -8,18 +8,18 @@ AppId={{D9D864B5-6B0B-44F9-9C61-6E3D12DF8A17}
 AppName={#MyAppName}
 AppVersion={#MyAppVersion}
 AppPublisher={#MyAppPublisher}
-DefaultDirName={localappdata}\Programs\Clonar DC
-DefaultGroupName=Clonar DC
+DefaultDirName={localappdata}\Programs\GuildSync
+DefaultGroupName=GuildSync
 DisableProgramGroupPage=yes
 PrivilegesRequired=lowest
 OutputDir=..\out\installer
-OutputBaseFilename=Clonar-DC-Setup
+OutputBaseFilename=GuildSync-Setup
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
 SetupIconFile=..\src\ClonarDC.Desktop\Assets\ClonarDC.ico
 UninstallDisplayIcon={app}\{#MyAppExeName}
-UninstallDisplayName=Clonar DC
+UninstallDisplayName=GuildSync
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 CloseApplications=yes
@@ -38,19 +38,19 @@ Name: "de"; MessagesFile: "compiler:Languages\German.isl"
 [CustomMessages]
 en.DesktopShortcut=Create a desktop shortcut
 en.ShortcutsGroup=Shortcuts:
-en.OpenApp=Open Clonar DC
+en.OpenApp=Open GuildSync
 ptbr.DesktopShortcut=Criar atalho na Área de Trabalho
 ptbr.ShortcutsGroup=Atalhos:
-ptbr.OpenApp=Abrir Clonar DC
+ptbr.OpenApp=Abrir GuildSync
 es.DesktopShortcut=Crear un acceso directo en el escritorio
 es.ShortcutsGroup=Accesos directos:
-es.OpenApp=Abrir Clonar DC
+es.OpenApp=Abrir GuildSync
 fr.DesktopShortcut=Créer un raccourci sur le Bureau
 fr.ShortcutsGroup=Raccourcis :
-fr.OpenApp=Ouvrir Clonar DC
+fr.OpenApp=Ouvrir GuildSync
 de.DesktopShortcut=Desktop-Verknüpfung erstellen
 de.ShortcutsGroup=Verknüpfungen:
-de.OpenApp=Clonar DC öffnen
+de.OpenApp=GuildSync öffnen
 
 [Files]
 Source: "..\out\app\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
@@ -58,10 +58,12 @@ Source: "..\out\backend\*"; DestDir: "{app}\backend"; Flags: ignoreversion recur
 
 [Registry]
 Root: HKCU; Subkey: "Software\Clonar DC"; ValueType: string; ValueName: "Language"; ValueData: "{code:GetAppCulture}"
+Root: HKCU; Subkey: "Software\GuildSync"; ValueType: string; ValueName: "Language"; ValueData: "{code:GetAppCulture}"
+Root: HKCU; Subkey: "Software\GuildSync"; ValueType: string; ValueName: "ApiUrl"; ValueData: "https://clonar-dc-api.onrender.com"
 
 [Icons]
-Name: "{autoprograms}\Clonar DC"; Filename: "{app}\{#MyAppExeName}"; IconFilename: "{app}\{#MyAppExeName}"
-Name: "{autodesktop}\Clonar DC"; Filename: "{app}\{#MyAppExeName}"; IconFilename: "{app}\{#MyAppExeName}"; Tasks: desktopicon
+Name: "{autoprograms}\GuildSync"; Filename: "{app}\{#MyAppExeName}"; IconFilename: "{app}\{#MyAppExeName}"
+Name: "{autodesktop}\GuildSync"; Filename: "{app}\{#MyAppExeName}"; IconFilename: "{app}\{#MyAppExeName}"; Tasks: desktopicon
 
 [Tasks]
 Name: "desktopicon"; Description: "{cm:DesktopShortcut}"; GroupDescription: "{cm:ShortcutsGroup}"; Flags: unchecked
