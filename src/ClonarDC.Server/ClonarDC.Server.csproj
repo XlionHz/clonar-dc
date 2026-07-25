@@ -9,11 +9,11 @@
     <Title>GuildSync API</Title>
     <Company>GuildSync</Company>
     <Authors>GuildSync</Authors>
-    <Description>Central accounts, payments, licenses and Discord integration for GuildSync.</Description>
-    <Version>0.7.1</Version>
-    <FileVersion>0.7.1.0</FileVersion>
-    <AssemblyVersion>0.7.1.0</AssemblyVersion>
-    <InformationalVersion>0.7.1</InformationalVersion>
+    <Description>Central accounts, payments, licenses, devices and Discord integration for GuildSync.</Description>
+    <Version>0.8.0</Version>
+    <FileVersion>0.8.0.0</FileVersion>
+    <AssemblyVersion>0.8.0.0</AssemblyVersion>
+    <InformationalVersion>0.8.0-alpha</InformationalVersion>
     <Deterministic>true</Deterministic>
   </PropertyGroup>
   <ItemGroup>
