@@ -35,6 +35,7 @@ public partial class MainWindow
 
         SidebarBrandHost.Content = BrandPresentation.CreateSidebarHeader();
         InitializeEditableServerInputs();
+        InitializeCompatibilityUi();
         InitializeUpdateUi();
         LocalizationService.Apply(this);
     }
