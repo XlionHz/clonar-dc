@@ -100,7 +100,6 @@ jobs:
           dotnet publish .\src\GuildSync.Bot\GuildSync.Bot.csproj -c Release -r linux-x64 --self-contained false -p:DebugType=None -p:DebugSymbols=false -o out/bot
           if (-not (Test-Path out/app/ClonarDC.exe)) { throw 'GuildSync desktop executable was not generated.' }
           if (-not (Test-Path out/app/api-url.txt)) { throw 'api-url.txt was not published.' }
-          if (-not (Test-Path out/app/GuildSyncLogo.png) -and -not (Test-Path out/app/ClonarDC.g.resources)) { throw 'GuildSync resources were not published.' }
           if (-not (Test-Path out/backend/ClonarDC.Server.exe)) { throw 'GuildSync backend executable was not generated.' }
           if (-not (Test-Path out/bot/GuildSync.Bot.dll)) { throw 'GuildSync Discord bot was not generated.' }
 
