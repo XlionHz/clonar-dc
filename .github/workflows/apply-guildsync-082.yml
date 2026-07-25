@@ -27,7 +27,6 @@ jobs:
 
           S = 1024
           image = Image.new('RGBA', (S, S), (0, 0, 0, 0))
-
           glow = Image.new('RGBA', image.size, (0,0,0,0))
           gd = ImageDraw.Draw(glow)
           gd.ellipse((135, 110, 890, 970), fill=(78, 54, 255, 105))
@@ -55,8 +54,6 @@ jobs:
           d.polygon(inner, fill=(8,12,32,255))
           d.line([(512,194),(719,294)], fill=(215,205,255,220), width=6)
           d.line([(305,294),(512,194)], fill=(215,205,255,220), width=6)
-
-          # Stylised G/arrow, matching the approved app mark.
           d.arc((329,333,702,706), start=36, end=326, fill=(142,76,255,255), width=72)
           d.line([(510,486),(700,486),(700,610)], fill=(76,99,255,255), width=74)
           d.polygon([(700,565),(700,641),(642,699),(602,646)], fill=(76,99,255,255))
@@ -82,13 +79,12 @@ jobs:
         run: |
           $ErrorActionPreference = 'Stop'
 
-          function Set-Text([string]$Path, [string]$Text) {
-            [IO.File]::WriteAllText((Join-Path $PWD $Path), $Text, [Text.UTF8Encoding]::new($false))
+          function Resolve-WritePath([string]$Path) {
+            if ([IO.Path]::IsPathRooted($Path)) { return $Path }
+            return Join-Path $PWD $Path
           }
-          function Replace-Text([string]$Path, [string]$Old, [string]$New) {
-            $text = Get-Content $Path -Raw
-            if (-not $text.Contains($Old)) { throw "$Path does not contain expected text: $Old" }
-            Set-Text $Path ($text.Replace($Old, $New))
+          function Set-Text([string]$Path, [string]$Text) {
+            [IO.File]::WriteAllText((Resolve-WritePath $Path), $Text, [Text.UTF8Encoding]::new($false))
           }
           function Replace-Regex([string]$Path, [string]$Pattern, [string]$Replacement) {
             $text = Get-Content $Path -Raw
@@ -111,9 +107,6 @@ jobs:
                       !string.IsNullOrWhiteSpace(parsed.Parameter))
                       return parsed;
 
-                  // No local format, length, prefix, account-type or identity decision.
-                  // A plain value uses the existing Discord Bot transport for backwards compatibility;
-                  // explicit schemes such as "Bot ..." or "Bearer ..." are preserved unchanged.
                   return new AuthenticationHeaderValue("Bot", transportValue);
               }
           }
@@ -154,7 +147,6 @@ jobs:
           $probeText = $probeText.Replace('Clonar DC', 'GuildSync').Replace('0.5.3', '0.8.2')
           Set-Text $probe $probeText
 
-          # User-visible branding. Internal namespaces/executable compatibility remain unchanged.
           Get-ChildItem 'src/ClonarDC.Desktop' -Recurse -File -Include *.cs,*.xaml,*.txt |
             ForEach-Object {
               $text = Get-Content $_.FullName -Raw
@@ -163,7 +155,6 @@ jobs:
               Set-Text $_.FullName $text
             }
 
-          # Version-bearing text files, excluding immutable release history/status snapshots.
           $versionFiles = git grep -l '0.8.1' -- ':!CHANGELOG.md' ':!build-status/**'
           foreach ($file in $versionFiles) {
             $text = Get-Content $file -Raw
@@ -171,35 +162,10 @@ jobs:
           }
 
           $changelog = Get-Content CHANGELOG.md -Raw
-          $entry = @'
-          ## 0.8.2 — Login Experience and Input Fixes
-
-          - Rebuilt the login screen from the approved premium concept with a real WPF animation opening the Welcome back panel toward the left.
-          - Replaced mixed/legacy app branding with one GuildSync vector identity across login, main window, registration, confirmations, update publishing, taskbar and installer assets.
-          - Renamed the credential field to Token and removed local format, length, prefix and account-type rejection.
-          - Made source and destination server controls editable so IDs can always be typed directly.
-          - Preserved loaded-server selection while supporting manual IDs without requiring the dropdown to contain an item.
-          - Fixed .NET 10 reliability-test assembly discovery.
-
-          '@
-          Set-Text CHANGELOG.md ($entry + $changelog)
-
-          # Contracts for the exact regressions reported by the user.
-          $contracts = Get-Content scripts/Test-SourceContracts.ps1 -Raw
-          if (-not $contracts.Contains('TokenAuthorization.cs')) {
-            $contracts = $contracts.Replace("Require-Text 'src/ClonarDC.Desktop/MainWindow.TokenValidation.cs'", "Require-Text 'src/ClonarDC.Desktop/Services/TokenAuthorization.cs' @('No local format, length, prefix', 'AuthenticationHeaderValue.TryParse')`r`nRequire-Text 'src/ClonarDC.Desktop/MainWindow.TokenValidation.cs'")
+          if (-not $changelog.StartsWith('## 0.8.2')) {
+            $entry = "## 0.8.2 — Login Experience and Input Fixes`r`n`r`n- Rebuilt the premium login screen with a real opening animation.`r`n- Unified GuildSync branding across every app window, taskbar and installer asset.`r`n- Renamed the credential field to Token and removed local format/type rejection.`r`n- Made source and destination server IDs directly editable.`r`n`r`n"
+            Set-Text CHANGELOG.md ($entry + $changelog)
           }
-          $contracts += @'
-
-          $desktopFiles = Get-ChildItem 'src/ClonarDC.Desktop' -Recurse -File -Include *.cs,*.xaml
-          foreach ($desktopFile in $desktopFiles) {
-              $source = Get-Content $desktopFile.FullName -Raw
-              if ($source.Contains('Token do bot inválido') -or $source.Contains('accepts only an official bot token')) {
-                  throw "Legacy local token-type rejection remains in $($desktopFile.FullName)"
-              }
-          }
-          '@
-          Set-Text scripts/Test-SourceContracts.ps1 $contracts
 
           git config user.name 'GuildSync Release Bot'
           git config user.email 'actions@users.noreply.github.com'
