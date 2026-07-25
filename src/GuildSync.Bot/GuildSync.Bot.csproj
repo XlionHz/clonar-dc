@@ -7,8 +7,15 @@
     <AssemblyName>GuildSync.Bot</AssemblyName>
     <RootNamespace>GuildSync.Bot</RootNamespace>
     <Product>GuildSync Bot</Product>
+    <Title>GuildSync Bot</Title>
+    <Company>GuildSync</Company>
+    <Authors>GuildSync</Authors>
     <Description>Official slash-command bot for GuildSync account linking, licenses and checkout.</Description>
-    <Version>0.1.0</Version>
+    <Version>0.7.1</Version>
+    <FileVersion>0.7.1.0</FileVersion>
+    <AssemblyVersion>0.7.1.0</AssemblyVersion>
+    <InformationalVersion>0.7.1</InformationalVersion>
+    <Deterministic>true</Deterministic>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Discord.Net" Version="3.18.0" />
