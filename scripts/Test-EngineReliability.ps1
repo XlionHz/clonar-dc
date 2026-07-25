@@ -1,9 +1,23 @@
 param(
-    [string]$DesktopAssembly = "$PSScriptRoot/../src/ClonarDC.Desktop/bin/Release/net10.0-windows/ClonarDC.dll"
+    [string]$DesktopAssembly = ''
 )
 
 $ErrorActionPreference = 'Stop'
+
+if ([string]::IsNullOrWhiteSpace($DesktopAssembly)) {
+    $desktopBin = Join-Path $PSScriptRoot '../src/ClonarDC.Desktop/bin/Release'
+    $candidate = Get-ChildItem $desktopBin -Recurse -Filter 'ClonarDC.dll' -File |
+        Where-Object { $_.FullName -notmatch '\\ref\\' } |
+        Sort-Object LastWriteTimeUtc -Descending |
+        Select-Object -First 1
+    if ($null -eq $candidate) {
+        throw "ClonarDC.dll was not found under $desktopBin after the desktop build."
+    }
+    $DesktopAssembly = $candidate.FullName
+}
+
 $assemblyPath = (Resolve-Path $DesktopAssembly).Path
+Write-Host "Testing desktop assembly: $assemblyPath"
 $assembly = [System.Reflection.Assembly]::LoadFrom($assemblyPath)
 
 function New-TypeInstance([string]$name) {
