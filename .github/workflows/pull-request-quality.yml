@@ -41,24 +41,38 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          dotnet restore ./src/ClonarDC.Desktop/ClonarDC.Desktop.csproj
-          dotnet restore ./src/ClonarDC.Server/ClonarDC.Server.csproj
-          dotnet restore ./src/GuildSync.Bot/GuildSync.Bot.csproj
+          dotnet restore ./src/ClonarDC.Desktop/ClonarDC.Desktop.csproj *>&1 | Tee-Object out/diagnostics/restore-desktop.log
+          dotnet restore ./src/ClonarDC.Server/ClonarDC.Server.csproj *>&1 | Tee-Object out/diagnostics/restore-api.log
+          dotnet restore ./src/GuildSync.Bot/GuildSync.Bot.csproj *>&1 | Tee-Object out/diagnostics/restore-bot.log
 
       - name: Build projects
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          dotnet build ./src/ClonarDC.Desktop/ClonarDC.Desktop.csproj -c Release --no-restore
-          dotnet build ./src/ClonarDC.Server/ClonarDC.Server.csproj -c Release --no-restore
-          dotnet build ./src/GuildSync.Bot/GuildSync.Bot.csproj -c Release --no-restore
-          dotnet publish ./src/ClonarDC.Desktop/ClonarDC.Desktop.csproj -c Release --no-restore --self-contained false -p:DebugType=None -p:DebugSymbols=false -o out/desktop-test
-          $assembly = Get-ChildItem out/desktop-test -Filter 'ClonarDC.dll' -File | Select-Object -First 1
-          if ($null -eq $assembly) {
-            Get-ChildItem out/desktop-test | Format-Table Name,Length | Out-String | Write-Host
-            throw 'Deterministic desktop assembly was not generated.'
+          try {
+            dotnet build ./src/ClonarDC.Desktop/ClonarDC.Desktop.csproj -c Release --no-restore *>&1 | Tee-Object out/diagnostics/build-desktop.log
+            if ($LASTEXITCODE -ne 0) { throw 'Desktop build failed.' }
+
+            dotnet build ./src/ClonarDC.Server/ClonarDC.Server.csproj -c Release --no-restore *>&1 | Tee-Object out/diagnostics/build-api.log
+            if ($LASTEXITCODE -ne 0) { throw 'API build failed.' }
+
+            dotnet build ./src/GuildSync.Bot/GuildSync.Bot.csproj -c Release --no-restore *>&1 | Tee-Object out/diagnostics/build-bot.log
+            if ($LASTEXITCODE -ne 0) { throw 'Bot build failed.' }
+
+            dotnet publish ./src/ClonarDC.Desktop/ClonarDC.Desktop.csproj -c Release --no-restore --self-contained false -p:DebugType=None -p:DebugSymbols=false -o out/desktop-test *>&1 | Tee-Object out/diagnostics/publish-desktop-test.log
+            if ($LASTEXITCODE -ne 0) { throw 'Desktop test publish failed.' }
+
+            $assembly = Get-ChildItem out/desktop-test -Filter 'ClonarDC.dll' -File | Select-Object -First 1
+            if ($null -eq $assembly) {
+              Get-ChildItem out/desktop-test | Format-Table Name,Length | Out-String | Tee-Object out/diagnostics/desktop-test-files.log
+              throw 'Deterministic desktop assembly was not generated.'
+            }
+            $assembly.FullName | Set-Content out/desktop-assembly-path.txt
           }
-          $assembly.FullName | Set-Content out/desktop-assembly-path.txt
+          catch {
+            $_ | Format-List * -Force | Out-String | Tee-Object out/diagnostics/build-exception.log
+            throw
+          }
 
       - name: Test engine reliability contracts
         shell: pwsh
