@@ -1,10 +1,10 @@
 # Latest verified build
 
 Status: **SUCCESS**
-Version: 0.8.0
-Source commit: 94132fbd7154f6f3d71c1d6f4fe3cd51f0c5db2c
-Workflow run: https://github.com/XlionHz/clonar-dc/actions/runs/30139105496
+Version: 0.8.1
+Source commit: 9cab21ec3b2e3e3d123772ce55a44af94e2c4ddd
+Workflow run: https://github.com/XlionHz/clonar-dc/actions/runs/30141382667
 Release publication: success
-SHA-256: D447DC60DE7248BF868EA4E341CCF29FAF7496F7078C1CAFC437A63D08706465
+SHA-256: 329677CF2486538427624990C39A9F4DC0B4A37C15CE404E75702C9D9829E6C1
 
-Validation: desktop, API and bot compiled; engine reliability, backup v2, device limits, session revocation, runtime, installer and update package verified.
+Validation: desktop, API and bot compiled; branding contracts, administrator reconciliation, API behavior, runtime, installer and update package verified.
