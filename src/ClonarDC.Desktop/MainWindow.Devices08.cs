@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Media;
 using ClonarDC.Services;
 
 namespace ClonarDC;
@@ -7,6 +8,74 @@ namespace ClonarDC;
 public partial class MainWindow
 {
     private List<DeviceDto> _devices08 = [];
+    private bool _deviceUiInitialized08;
+    private readonly TextBlock DeviceLimitText = new() { TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 8, 0, 12) };
+    private readonly ListBox DevicesList = new() { MinHeight = 120, MaxHeight = 230 };
+    private readonly Button RevokeDeviceButton08 = new() { Content = "Remove selected device", IsEnabled = false, Margin = new Thickness(8, 10, 0, 0) };
+
+    protected override void OnActivated(EventArgs e)
+    {
+        base.OnActivated(e);
+        if (_deviceUiInitialized08) return;
+        _deviceUiInitialized08 = true;
+        BuildDeviceUi08();
+        _ = InitializeDevices08Async();
+    }
+
+    private void BuildDeviceUi08()
+    {
+        DevicesList.SelectionChanged += DevicesList_SelectionChanged08;
+        RevokeDeviceButton08.Click += RevokeDevice08_Click;
+        var refresh = new Button { Content = "Refresh devices", Margin = new Thickness(0, 10, 0, 0) };
+        refresh.Click += RefreshDevices08_Click;
+
+        var devicePanel = new StackPanel();
+        devicePanel.Children.Add(new TextBlock
+        {
+            Text = "Licensed devices",
+            FontSize = 18,
+            FontWeight = FontWeights.Bold
+        });
+        devicePanel.Children.Add(new TextBlock
+        {
+            Text = "GuildSync stores only a cryptographic hash of the protected device identity. Removing a device immediately ends sessions from that computer.",
+            TextWrapping = TextWrapping.Wrap,
+            Foreground = TryFindResource("MutedBrush") as Brush,
+            Margin = new Thickness(0, 8, 0, 0)
+        });
+        devicePanel.Children.Add(DeviceLimitText);
+        devicePanel.Children.Add(DevicesList);
+        var buttons = new StackPanel { Orientation = Orientation.Horizontal };
+        buttons.Children.Add(refresh);
+        buttons.Children.Add(RevokeDeviceButton08);
+        devicePanel.Children.Add(buttons);
+
+        var border = new Border
+        {
+            Background = TryFindResource("PanelBrush") as Brush,
+            BorderBrush = TryFindResource("BorderBrush") as Brush,
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(14),
+            Padding = new Thickness(22),
+            Margin = new Thickness(0, 18, 0, 0),
+            Child = devicePanel
+        };
+
+        if (Pages.Items.Count > 5 && Pages.Items[5] is TabItem settingsTab &&
+            settingsTab.Content is ScrollViewer scroll && scroll.Content is StackPanel settingsRoot)
+            settingsRoot.Children.Add(border);
+
+        if (_session.IsAdmin && LicenseBox.Parent is StackPanel adminActions)
+        {
+            var reset = new Button
+            {
+                Content = "Reset licensed devices",
+                Margin = new Thickness(0, 8, 0, 0)
+            };
+            reset.Click += ResetSelectedUserDevices08_Click;
+            adminActions.Children.Add(reset);
+        }
+    }
 
     private async Task InitializeDevices08Async()
     {
