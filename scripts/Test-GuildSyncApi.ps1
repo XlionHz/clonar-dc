@@ -21,7 +21,7 @@ function Assert-HttpStatus {
         throw "$Message Expected HTTP $ExpectedStatus, but the request succeeded."
     }
     catch {
-        $status = $_.Exception.Response.StatusCode.value__
+        $status = [int]$_.Exception.Response.StatusCode
         if ($status -ne $ExpectedStatus) { throw }
     }
 }
@@ -80,6 +80,7 @@ try {
     Assert-Equal $status.storage 'file' 'Unexpected test storage.'
     Assert-Equal $status.discordIntegrationConfigured $false 'Bot integration must be disabled without a key.'
     Assert-Equal $status.deviceIdentityRequired $true 'Device identity policy was not enabled.'
+    Write-Host 'API status and mandatory-device policy passed.'
 
     $email = "user-$([Guid]::NewGuid().ToString('N'))@example.invalid"
     $password = 'BuildOnlyUser2026'
@@ -96,6 +97,7 @@ try {
             password = $password
         } | ConvertTo-Json -Compress)
     } 401 'Login without a device identity was accepted.'
+    Write-Host 'Registration and rejection of identity-less login passed.'
 
     $deviceOne = New-DeviceId
     $login = Invoke-Login $email $password $deviceOne 'CI workstation one'
@@ -117,20 +119,26 @@ try {
     $devices = @(Invoke-RestMethod -Uri "$baseUrl/devices" -Headers $headers)
     Assert-Equal $devices.Count 1 'Device list did not contain exactly one active device.'
     Assert-Equal $devices[0].active $true 'Registered device was not active.'
+    Write-Host 'First-device claim and idempotent re-claim passed.'
 
     $deviceTwo = New-DeviceId
     Assert-HttpStatus {
         Invoke-Login $email $password $deviceTwo 'CI workstation two'
     } 401 'A second device bypassed the one-device license limit.'
+    Write-Host 'Second device was correctly blocked by the license limit.'
 
     Invoke-RestMethod -Method Delete -Uri "$baseUrl/devices/$($devices[0].id)" -Headers $headers | Out-Null
     Assert-HttpStatus { Invoke-RestMethod -Uri "$baseUrl/me" -Headers $headers } 401 'Revoking a device did not revoke its session.'
 
     $replacementLogin = Invoke-Login $email $password $deviceTwo 'CI workstation two'
     if (-not $replacementLogin.accessToken) { throw 'Replacement device could not use the released slot.' }
+    Assert-Equal $replacementLogin.license.deviceCount 1 'Replacement login did not report one active device.'
     $replacementHeaders = @{ Authorization = "Bearer $($replacementLogin.accessToken)" }
     $replacementDevices = @(Invoke-RestMethod -Uri "$baseUrl/devices" -Headers $replacementHeaders)
-    Assert-Equal (@($replacementDevices | Where-Object active)).Count 1 'Replacement login left an invalid active-device count.'
+    $activeReplacementDevices = @($replacementDevices | Where-Object { $_.active -eq $true })
+    Assert-Equal $activeReplacementDevices.Count 1 'Replacement login left an invalid active-device count.'
+    Assert-Equal $activeReplacementDevices[0].name 'CI workstation two' 'Replacement device identity was not preserved.'
+    Write-Host 'Device revocation, session invalidation and slot replacement passed.'
 
     Invoke-RestMethod -Method Post -Uri "$baseUrl/auth/logout" -Headers $replacementHeaders | Out-Null
     Assert-HttpStatus { Invoke-RestMethod -Uri "$baseUrl/me" -Headers $replacementHeaders } 401 'Logout did not revoke the session.'
@@ -141,6 +149,7 @@ try {
     $adminHeaders = @{ Authorization = "Bearer $($adminLogin.accessToken)" }
     Invoke-RestMethod -Method Post -Uri "$baseUrl/admin/users/$($userLogin.user.id)/suspend" -Headers $adminHeaders -ContentType 'application/json' -Body '{}' | Out-Null
     Assert-HttpStatus { Invoke-RestMethod -Uri "$baseUrl/me" -Headers $userHeaders } 401 'Suspension did not revoke active sessions.'
+    Write-Host 'Logout and administrative suspension revocation passed.'
 
     Assert-HttpStatus {
         Invoke-RestMethod -Method Post -Uri "$baseUrl/discord/bot/link-code" -ContentType 'application/json' -Body '{"discordUserId":"123456789012345678"}'
