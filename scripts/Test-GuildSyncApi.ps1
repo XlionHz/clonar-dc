@@ -38,6 +38,12 @@ function Invoke-Login {
     } | ConvertTo-Json -Compress)
 }
 
+function Get-DeviceList {
+    param([hashtable]$Headers)
+    $response = Invoke-RestMethod -Uri "$baseUrl/devices" -Headers $Headers
+    foreach ($item in $response) { Write-Output $item }
+}
+
 $testData = Join-Path $env:RUNNER_TEMP "guildsync-api-$([Guid]::NewGuid().ToString('N'))"
 New-Item -ItemType Directory -Force -Path $testData | Out-Null
 $port = 18787
@@ -116,7 +122,7 @@ try {
     } | ConvertTo-Json -Compress)
     Assert-Equal $claimedAgain.activeDevices 1 'Claiming the same device created a duplicate.'
 
-    $devices = @(Invoke-RestMethod -Uri "$baseUrl/devices" -Headers $headers)
+    $devices = @(Get-DeviceList -Headers $headers)
     Assert-Equal $devices.Count 1 'Device list did not contain exactly one active device.'
     Assert-Equal $devices[0].active $true 'Registered device was not active.'
     Write-Host 'First-device claim and idempotent re-claim passed.'
@@ -134,8 +140,9 @@ try {
     if (-not $replacementLogin.accessToken) { throw 'Replacement device could not use the released slot.' }
     Assert-Equal $replacementLogin.license.deviceCount 1 'Replacement login did not report one active device.'
     $replacementHeaders = @{ Authorization = "Bearer $($replacementLogin.accessToken)" }
-    $replacementDevices = @(Invoke-RestMethod -Uri "$baseUrl/devices" -Headers $replacementHeaders)
+    $replacementDevices = @(Get-DeviceList -Headers $replacementHeaders)
     $activeReplacementDevices = @($replacementDevices | Where-Object { $_.active -eq $true })
+    Assert-Equal $replacementDevices.Count 2 'Device history did not preserve the revoked and replacement records.'
     Assert-Equal $activeReplacementDevices.Count 1 'Replacement login left an invalid active-device count.'
     Assert-Equal $activeReplacementDevices[0].name 'CI workstation two' 'Replacement device identity was not preserved.'
     Write-Host 'Device revocation, session invalidation and slot replacement passed.'
