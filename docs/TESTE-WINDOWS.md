@@ -1,4 +1,4 @@
-# Clonar DC — validação Windows
+# GuildSync — validação Windows
 
 ## Estado desta build
 

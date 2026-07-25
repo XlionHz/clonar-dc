@@ -10,7 +10,7 @@ public sealed class SecureTokenStore
     private readonly string _path;
     private readonly string _description;
 
-    public SecureTokenStore(string fileName = "token.dat", string description = "Clonar DC")
+    public SecureTokenStore(string fileName = "token.dat", string description = "GuildSync")
     {
         var safeFileName = Path.GetFileName(fileName);
         if (string.IsNullOrWhiteSpace(safeFileName)) safeFileName = "token.dat";

@@ -17,7 +17,7 @@ public sealed record DiscordConnectionProbeResult(
 public static class DiscordConnectionProbe
 {
     private const string ApiBase = "https://discord.com/api/v10/";
-    private const string UserAgent = "DiscordBot (https://github.com/XlionHz/clonar-dc, 0.5.3)";
+    private const string UserAgent = "DiscordBot (https://github.com/XlionHz/clonar-dc, 0.8.2)";
     private static readonly ConcurrentDictionary<string, CacheEntry> Cache = new(StringComparer.Ordinal);
 
     public static async Task<DiscordConnectionProbeResult> ValidateAndDiscoverAsync(
@@ -26,8 +26,7 @@ public static class DiscordConnectionProbe
         CancellationToken cancellationToken = default)
     {
         var token = NormalizeToken(rawToken);
-        if (token.Length < 20)
-            throw new InvalidOperationException("The value entered is not a complete Discord bot token.");
+        
 
         var cacheKey = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(token)));
         if (Cache.TryGetValue(cacheKey, out var cached) && cached.ExpiresAt > DateTimeOffset.UtcNow)
@@ -37,8 +36,7 @@ public static class DiscordConnectionProbe
 
         progress?.Report("Checking the bot identity with Discord…");
         var me = await GetJsonAsync(http, "users/@me", cancellationToken);
-        if (me["bot"]?.GetValue<bool>() != true)
-            throw new InvalidOperationException("This credential belongs to a user/OAuth session. Clonar DC accepts only an official bot token from the Discord Developer Portal.");
+        
 
         var botId = me["id"]?.GetValue<string>()
                     ?? throw new InvalidOperationException("Discord validated the token but did not return the bot ID.");
@@ -59,14 +57,8 @@ public static class DiscordConnectionProbe
 
     public static string NormalizeToken(string rawToken)
     {
-        var token = (rawToken ?? string.Empty).Trim();
-
-        if ((token.StartsWith('"') && token.EndsWith('"')) ||
-            (token.StartsWith('\'') && token.EndsWith('\'')) ||
-            (token.StartsWith('`') && token.EndsWith('`')))
-        {
-            token = token[1..^1].Trim();
-        }
+        return rawToken ?? string.Empty;
+    }
 
         if (token.StartsWith("Bot ", StringComparison.OrdinalIgnoreCase))
             token = token[4..].Trim();
@@ -85,7 +77,7 @@ public static class DiscordConnectionProbe
             BaseAddress = new Uri(ApiBase),
             Timeout = TimeSpan.FromSeconds(45)
         };
-        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bot", token);
+        client.DefaultRequestHeaders.Authorization = TokenAuthorization.Create(token);
         client.DefaultRequestHeaders.UserAgent.ParseAdd(UserAgent);
         client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
         return client;
@@ -137,8 +129,8 @@ public static class DiscordConnectionProbe
                 ["properties"] = new JsonObject
                 {
                     ["os"] = "windows",
-                    ["browser"] = "Clonar DC",
-                    ["device"] = "Clonar DC"
+                    ["browser"] = "GuildSync",
+                    ["device"] = "GuildSync"
                 }
             }
         };

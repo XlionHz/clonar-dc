@@ -5,7 +5,7 @@ namespace ClonarDC.Services;
 public static class ApiEndpointResolver
 {
     private const string RegistryPath = @"Software\GuildSync";
-    private const string LegacyRegistryPath = @"Software\Clonar DC";
+    private const string LegacyRegistryPath = @"Software\GuildSync";
     private const string RegistryValue = "ApiUrl";
     private const string LocalFallback = "http://127.0.0.1:8787";
 

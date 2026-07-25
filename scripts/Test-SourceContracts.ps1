@@ -10,10 +10,10 @@ function Require-Text {
     }
 }
 
-Require-Text 'src/ClonarDC.Desktop/ClonarDC.Desktop.csproj' @('<Version>0.8.1</Version>', '<Product>GuildSync</Product>')
-Require-Text 'src/ClonarDC.Server/ClonarDC.Server.csproj' @('<Version>0.8.1</Version>', '<Product>GuildSync API</Product>')
-Require-Text 'src/GuildSync.Bot/GuildSync.Bot.csproj' @('<Version>0.8.1</Version>', '<Product>GuildSync Bot</Product>')
-Require-Text 'installer/ClonarDC.iss' @('MyAppName "GuildSync"', 'MyAppVersion "0.8.1"', 'GuildSync-Setup', 'GuildSync.ico')
+Require-Text 'src/ClonarDC.Desktop/ClonarDC.Desktop.csproj' @('<Version>0.8.2</Version>', '<Product>GuildSync</Product>')
+Require-Text 'src/ClonarDC.Server/ClonarDC.Server.csproj' @('<Version>0.8.2</Version>', '<Product>GuildSync API</Product>')
+Require-Text 'src/GuildSync.Bot/GuildSync.Bot.csproj' @('<Version>0.8.2</Version>', '<Product>GuildSync Bot</Product>')
+Require-Text 'installer/ClonarDC.iss' @('MyAppName "GuildSync"', 'MyAppVersion "0.8.2"', 'GuildSync-Setup', 'GuildSync.ico')
 Require-Text 'src/ClonarDC.Server/Program.cs' @('/auth/logout', '/auth/logout-all', 'SlidingWindowLimiter', 'RevokeAllSessionsAsync', 'DevicePolicy.RequireIdentity', 'bootstrap-admin-synchronized')
 Require-Text 'src/ClonarDC.Server/DeviceManagement.cs' @('/devices/claim', '/devices/{deviceId}', 'DeviceIdHash', 'ResetDevicesAsync')
 Require-Text 'src/ClonarDC.Server/StatePersistence.cs' @('GUILDSYNC_ALLOW_FILE_STORAGE', 'pg_advisory_xact_lock', 'concurrent database writer')
@@ -31,7 +31,7 @@ Require-Text 'src/ClonarDC.Desktop/Services/DiscordPreflightService.cs' @('Manag
 Require-Text 'src/ClonarDC.Desktop/Services/BackupService.cs' @('FormatVersion = 2', 'snapshot.json', 'MaximumArchiveBytes', 'LoadLegacyEnvelope')
 Require-Text 'src/ClonarDC.Desktop/Services/OperationReportService.cs' @('FindLatestResumableAsync', 'SaveAsync', 'ExportSummaryAsync')
 Require-Text 'src/GuildSync.Bot/Program.cs' @('WithName("status")', 'AllowedMentions.None', 'Error ID')
-Require-Text '.github/workflows/final-release.yml' @("APP_VERSION: '0.8.1'", 'Test-EngineReliability.ps1')
+Require-Text '.github/workflows/final-release.yml' @("APP_VERSION: '0.8.2'", 'Test-EngineReliability.ps1')
 
 $trackedText = git ls-files | Where-Object { $_ -notmatch '\.(png|ico|exe|zip|dll|pdb|jpeg|jpg|gif|webp)$' }
 foreach ($file in $trackedText) {

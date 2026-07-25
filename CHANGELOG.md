@@ -1,8 +1,15 @@
+## 0.8.2 — Login Experience and Input Fixes
+
+- Rebuilt the premium login screen with a real opening animation.
+- Unified GuildSync branding across every app window, taskbar and installer asset.
+- Renamed the credential field to Token and removed local format/type rejection.
+- Made source and destination server IDs directly editable.
+
 # Changelog
 
 All notable GuildSync changes are documented here.
 
-## [0.8.1] - 2026-07-25
+## [0.8.2] - 2026-07-25
 
 ### Branding and desktop
 
@@ -20,7 +27,7 @@ All notable GuildSync changes are documented here.
 
 ### Release validation
 
-- Aligned desktop, API, bot, installer, runtime identifiers and update packaging to 0.8.1.
+- Aligned desktop, API, bot, installer, runtime identifiers and update packaging to 0.8.2.
 - Added source contracts for cropped branding, Overview rendering, administrator reconciliation and explicit local developer mode.
 
 ## [0.8.0] - 2026-07-25
@@ -53,7 +60,7 @@ All notable GuildSync changes are documented here.
 - Added atomic backup creation and cleanup of interrupted temporary files.
 - Added snapshot schema validation and structural safety limits.
 - Preserved compatibility with 0.7 backup envelopes.
-- Added best-effort migration from the former `Documents/Clonar DC/Backups` folder to `Documents/GuildSync/Backups` without deleting originals.
+- Added best-effort migration from the former `Documents/GuildSync/Backups` folder to `Documents/GuildSync/Backups` without deleting originals.
 
 ### Licensed devices
 

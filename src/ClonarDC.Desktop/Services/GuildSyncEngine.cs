@@ -24,18 +24,15 @@ public sealed class GuildSyncEngine : IDisposable
             BaseAddress = new Uri(ApiBase),
             Timeout = TimeSpan.FromSeconds(60)
         };
-        _http.DefaultRequestHeaders.UserAgent.ParseAdd("GuildSync-Desktop/0.8.1");
+        _http.DefaultRequestHeaders.UserAgent.ParseAdd("GuildSync-Desktop/0.8.2");
         _http.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
     }
 
     public void SetToken(string token)
     {
-        token = token.Trim();
-        if (token.StartsWith("Bot ", StringComparison.OrdinalIgnoreCase)) token = token[4..].Trim();
-        if (token.Length < 20) throw new InvalidOperationException("Token do bot inválido ou incompleto.");
-        _token = token;
-        _http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bot", token);
-        _captureService.SetToken(token);
+        _token = token ?? string.Empty;
+        _http.DefaultRequestHeaders.Authorization = TokenAuthorization.Create(_token);
+        _captureService.SetToken(_token);
     }
 
     public async Task<(ClonePlan Plan, GuildSnapshot Source)> AnalyzeAsync(

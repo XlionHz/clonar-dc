@@ -13,11 +13,10 @@ public sealed class DiscordService : IDisposable
 
     public void SetToken(string token)
     {
-        token = token.Trim();
-        if (token.StartsWith("Bot ", StringComparison.OrdinalIgnoreCase)) token = token[4..].Trim();
-        _token = token;
-        _http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bot", token);
-        _http.DefaultRequestHeaders.UserAgent.ParseAdd("ClonarDC/0.3 (+desktop-app)");
+        _token = token ?? string.Empty;
+        _http.DefaultRequestHeaders.Authorization = TokenAuthorization.Create(_token);
+        if (!_http.DefaultRequestHeaders.UserAgent.Any())
+            _http.DefaultRequestHeaders.UserAgent.ParseAdd("GuildSync-Desktop/0.8.2");
     }
 
     public async Task<string> ValidateTokenAsync(CancellationToken ct = default)

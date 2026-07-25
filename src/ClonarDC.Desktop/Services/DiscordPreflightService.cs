@@ -22,15 +22,12 @@ public sealed class DiscordPreflightService : IDisposable
     public DiscordPreflightService()
     {
         _http.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
-        _http.DefaultRequestHeaders.UserAgent.ParseAdd("GuildSync-Preflight/0.8.1");
+        _http.DefaultRequestHeaders.UserAgent.ParseAdd("GuildSync-Preflight/0.8.2");
     }
 
     public void SetToken(string token)
     {
-        token = token.Trim();
-        if (token.StartsWith("Bot ", StringComparison.OrdinalIgnoreCase)) token = token[4..].Trim();
-        if (token.Length < 20) throw new InvalidOperationException("Token do bot inválido ou incompleto.");
-        _http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bot", token);
+        _http.DefaultRequestHeaders.Authorization = TokenAuthorization.Create(token);
     }
 
     public async Task<DiscordPreflightReport> CheckAsync(

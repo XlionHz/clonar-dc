@@ -2,7 +2,7 @@
 
 O repositório já contém um Blueprint do Render (`render.yaml`). Ele cria, em uma única operação:
 
-- a API HTTPS do Clonar DC;
+- a API HTTPS do GuildSync;
 - um banco PostgreSQL conectado automaticamente;
 - deploy automático a partir da branch `main`;
 - verificação de saúde em `/status`.
@@ -55,7 +55,7 @@ Nunca coloque Access Token ou chave do webhook no GitHub, no aplicativo ou em me
 O desktop aceita uma API central por:
 
 1. variável `CLONARDC_API`;
-2. registro do Windows `HKCU\Software\Clonar DC\ApiUrl`;
+2. registro do Windows `HKCU\Software\GuildSync\ApiUrl`;
 3. arquivo `api-url.txt` ao lado do executável.
 
 Até a URL central ser definida, ele continua usando o backend local como fallback.
