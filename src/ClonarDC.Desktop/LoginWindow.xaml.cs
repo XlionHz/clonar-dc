@@ -5,12 +5,26 @@ namespace ClonarDC;
 
 public partial class LoginWindow : Window
 {
-    private readonly AuthClient _auth = new();
+    private const string LocalDeveloperUrl = "http://127.0.0.1:8787";
+    private AuthClient _auth;
+
     public AppSession? Session { get; private set; }
+    public bool IsLocalDeveloperSession { get; private set; }
 
     public LoginWindow()
     {
+        if (string.Equals(
+                Environment.GetEnvironmentVariable("GUILDSYNC_API"),
+                LocalDeveloperUrl,
+                StringComparison.OrdinalIgnoreCase))
+            Environment.SetEnvironmentVariable("GUILDSYNC_API", null);
+
+        _auth = new AuthClient();
         InitializeComponent();
+        BrandMarkHost.Content = BrandPresentation.CreateMark(138);
+        BackendModeText.Text = _auth.UsesCentralBackend
+            ? "Connected to the GuildSync central service."
+            : "Connected to the local GuildSync service.";
         LocalizationService.Apply(this);
     }
 
@@ -35,10 +49,45 @@ public partial class LoginWindow : Window
             return;
         }
 
-        SetBusy(true, LocalizationService.T(isDeveloper ? "Opening developer mode…" : "Signing in…"));
+        SetBusy(true, LocalizationService.T(isDeveloper ? "Opening administrator access…" : "Signing in…"));
         try
         {
-            var session = await _auth.LoginAsync(email, password, bootstrapDeveloper: isDeveloper);
+            AppSession session;
+            if (isDeveloper && _auth.UsesCentralBackend)
+            {
+                try
+                {
+                    session = await _auth.LoginAsync(email, password);
+                    if (!session.IsAdmin)
+                        throw new InvalidOperationException("The central account is not authorized as an administrator.");
+                }
+                catch (Exception centralFailure)
+                {
+                    StatusText.Text = "Central administrator access is unavailable. Opening the isolated local developer service…";
+                    Environment.SetEnvironmentVariable("GUILDSYNC_API", LocalDeveloperUrl);
+                    _auth.Dispose();
+                    _auth = new AuthClient(LocalDeveloperUrl);
+
+                    try
+                    {
+                        session = await _auth.LoginAsync(email, password, bootstrapDeveloper: true);
+                    }
+                    catch (Exception localFailure)
+                    {
+                        Environment.SetEnvironmentVariable("GUILDSYNC_API", null);
+                        throw new InvalidOperationException(
+                            $"Central administrator login failed: {centralFailure.Message} Local developer login also failed: {localFailure.Message}");
+                    }
+
+                    IsLocalDeveloperSession = true;
+                    BackendModeText.Text = "LOCAL DEVELOPER MODE — this administration panel uses an isolated database, not the public GuildSync service.";
+                }
+            }
+            else
+            {
+                session = await _auth.LoginAsync(email, password, bootstrapDeveloper: isDeveloper);
+            }
+
             if (isDeveloper && !session.IsAdmin)
                 throw new InvalidOperationException("The main account did not receive administrator authorization.");
 
