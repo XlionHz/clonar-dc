@@ -43,10 +43,10 @@ public sealed class DiscordPreflightService : IDisposable
             throw new InvalidOperationException("ID do servidor de destino inválido.");
 
         var me = await GetAsync("users/@me", ct);
-        var guild = await GetAsync($"guilds/{guildId}", ct);
-        var member = await GetAsync($"guilds/{guildId}/members/@me", ct);
         var botId = me["id"]?.GetValue<string>()
                     ?? throw new InvalidDataException("O Discord não devolveu a identidade do bot.");
+        var guild = await GetAsync($"guilds/{guildId}", ct);
+        var member = await GetAsync($"guilds/{guildId}/members/{botId}", ct);
         var ownerId = guild["owner_id"]?.GetValue<string>();
         var roles = guild["roles"]?.AsArray()
                     ?? throw new InvalidDataException("O Discord não devolveu os cargos do servidor de destino.");
@@ -133,7 +133,7 @@ public sealed class DiscordPreflightService : IDisposable
             {
                 HttpStatusCode.Unauthorized => "O Discord recusou o token do bot.",
                 HttpStatusCode.Forbidden => "O bot não consegue consultar a própria associação ao servidor de destino.",
-                HttpStatusCode.NotFound => "O servidor de destino não foi encontrado para este bot.",
+                HttpStatusCode.NotFound => "O servidor de destino não foi encontrado para este bot ou o bot não é membro dele.",
                 _ => $"Falha no preflight do Discord: HTTP {(int)response.StatusCode}."
             });
         }
