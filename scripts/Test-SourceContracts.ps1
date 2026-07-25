@@ -18,7 +18,16 @@ Require-Text 'src/ClonarDC.Server/Program.cs' @('/auth/logout', '/auth/logout-al
 Require-Text 'src/ClonarDC.Server/DeviceManagement.cs' @('/devices/claim', '/devices/{deviceId}', 'DeviceIdHash', 'FixedTimeDeviceHashEquals', 'ResetDevicesAsync')
 Require-Text 'src/ClonarDC.Server/StatePersistence.cs' @('GUILDSYNC_ALLOW_FILE_STORAGE', 'pg_advisory_xact_lock', 'concurrent database writer', 'revision bigint')
 Require-Text 'src/ClonarDC.Desktop/Services/GuildSyncEngine.cs' @('CloneExecutionReport', 'VerifySnapshot', 'ChannelKey', 'SendWithRetryAsync', 'completed-with-differences')
-Require-Text 'src/ClonarDC.Desktop/Services/DiscordPreflightService.cs' @('ManageChannels', 'ManageRoles', 'ManageGuildExpressions', 'HighestRolePosition')
+Require-Text 'src/ClonarDC.Desktop/Services/DiscordPreflightService.cs' @(
+    'ManageChannels',
+    'ManageRoles',
+    'ManageGuildExpressions',
+    'HighestRolePosition',
+    'guilds/{guildId}/members/{botId}',
+    'CreateGuildExpressions',
+    'COMMUNITY',
+    'sourceRolePermissions'
+)
 Require-Text 'src/ClonarDC.Desktop/Services/BackupService.cs' @('FormatVersion = 2', 'snapshot.json', 'MaximumArchiveBytes', 'LoadLegacyEnvelope', 'CryptographicOperations.FixedTimeEquals')
 Require-Text 'src/ClonarDC.Desktop/Services/OperationReportService.cs' @('FindLatestResumableAsync', 'SaveAsync', 'ExportSummaryAsync')
 Require-Text 'src/ClonarDC.Desktop/Services/DeviceIdentityService.cs' @('RandomNumberGenerator.GetBytes(32)', 'SecureTokenStore', 'DeviceIdentity')
