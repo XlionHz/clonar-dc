@@ -221,7 +221,7 @@
                                 Margin="0,0,0,10"/>
 
                 <TextBlock HorizontalAlignment="Center" TextAlignment="Center"
-                           FontSize="66" FontWeight="Bold" LetterSpacing="-1">
+                           FontSize="66" FontWeight="Bold">
                     <TextBlock.Foreground><StaticResource ResourceKey="WordmarkGradient"/></TextBlock.Foreground>
                     <Run Text="GuildSync"/>
                 </TextBlock>
