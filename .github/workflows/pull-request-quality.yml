@@ -1,0 +1,69 @@
+name: GuildSync Pull Request Quality
+
+on:
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: guildsync-pr-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-smoke:
+    runs-on: windows-latest
+    timeout-minutes: 35
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Verify source contracts and secrets
+        shell: pwsh
+        run: ./scripts/Test-SourceContracts.ps1
+
+      - name: Restore projects
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          dotnet restore ./src/ClonarDC.Desktop/ClonarDC.Desktop.csproj
+          dotnet restore ./src/ClonarDC.Server/ClonarDC.Server.csproj
+          dotnet restore ./src/GuildSync.Bot/GuildSync.Bot.csproj
+
+      - name: Build projects
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          dotnet build ./src/ClonarDC.Desktop/ClonarDC.Desktop.csproj -c Release --no-restore
+          dotnet build ./src/ClonarDC.Server/ClonarDC.Server.csproj -c Release --no-restore
+          dotnet build ./src/GuildSync.Bot/GuildSync.Bot.csproj -c Release --no-restore
+
+      - name: Publish API for smoke test
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          dotnet publish ./src/ClonarDC.Server/ClonarDC.Server.csproj -c Release -r win-x64 --self-contained true -p:DebugType=None -p:DebugSymbols=false -o out/backend
+          if (-not (Test-Path out/backend/ClonarDC.Server.exe)) { throw 'GuildSync API executable was not generated.' }
+
+      - name: Run API behavior smoke test
+        shell: pwsh
+        run: ./scripts/Test-GuildSyncApi.ps1 -BackendPath "$PWD/out/backend/ClonarDC.Server.exe" -ExpectedVersion '0.7.1'
+
+      - name: Upload diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: guildsync-pr-diagnostics
+          path: |
+            src/**/bin/**/*.deps.json
+            src/**/bin/**/*.runtimeconfig.json
+          if-no-files-found: ignore
+          retention-days: 7

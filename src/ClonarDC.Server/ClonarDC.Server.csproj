@@ -6,8 +6,15 @@
     <AssemblyName>ClonarDC.Server</AssemblyName>
     <RootNamespace>ClonarDC.Server</RootNamespace>
     <Product>GuildSync API</Product>
+    <Title>GuildSync API</Title>
+    <Company>GuildSync</Company>
+    <Authors>GuildSync</Authors>
     <Description>Central accounts, payments, licenses and Discord integration for GuildSync.</Description>
-    <Version>0.5.0</Version>
+    <Version>0.7.1</Version>
+    <FileVersion>0.7.1.0</FileVersion>
+    <AssemblyVersion>0.7.1.0</AssemblyVersion>
+    <InformationalVersion>0.7.1</InformationalVersion>
+    <Deterministic>true</Deterministic>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Npgsql" Version="10.0.3" />
