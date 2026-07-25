@@ -15,7 +15,7 @@ concurrency:
 jobs:
   build-and-smoke:
     runs-on: windows-latest
-    timeout-minutes: 35
+    timeout-minutes: 40
 
     steps:
       - name: Checkout
@@ -45,6 +45,10 @@ jobs:
           dotnet build ./src/ClonarDC.Desktop/ClonarDC.Desktop.csproj -c Release --no-restore
           dotnet build ./src/ClonarDC.Server/ClonarDC.Server.csproj -c Release --no-restore
           dotnet build ./src/GuildSync.Bot/GuildSync.Bot.csproj -c Release --no-restore
+
+      - name: Test engine reliability contracts
+        shell: pwsh
+        run: ./scripts/Test-EngineReliability.ps1
 
       - name: Publish API for smoke test
         shell: pwsh
