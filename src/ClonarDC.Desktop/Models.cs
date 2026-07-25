@@ -95,8 +95,10 @@ public sealed class ClonePlan
     public int TargetEmojisToDelete { get; set; }
     public int UnsupportedMemberOverwrites { get; set; }
     public int RiskScore { get; set; }
+    public List<string> BlockingIssues { get; set; } = [];
     public List<string> Warnings { get; set; } = [];
     public bool IsDestructive => TargetRolesToDelete > 0 || TargetChannelsToDelete > 0 || TargetEmojisToDelete > 0;
+    public bool CanExecute => BlockingIssues.Count == 0;
 }
 
 public sealed record OperationLog(DateTimeOffset Time, string Level, string Message);
