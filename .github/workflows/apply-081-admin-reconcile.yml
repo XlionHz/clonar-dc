@@ -1,14 +1,14 @@
 name: Apply GuildSync 0.8.1 Hotfix Patches
 
 on:
-  push:
-    branches: [ agent/guildsync-0.8.1-brand-admin-hotfix ]
+  pull_request:
+    branches: [ main ]
 
 permissions:
   contents: write
 
 concurrency:
-  group: guildsync-081-hotfix-patches
+  group: guildsync-081-hotfix-patches-${{ github.event.pull_request.number }}
   cancel-in-progress: true
 
 jobs:
@@ -18,7 +18,7 @@ jobs:
       - name: Checkout hotfix branch
         uses: actions/checkout@v4
         with:
-          ref: agent/guildsync-0.8.1-brand-admin-hotfix
+          ref: ${{ github.head_ref }}
           fetch-depth: 0
 
       - name: Apply administrator reconciliation
@@ -41,4 +41,4 @@ jobs:
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add src installer scripts README.md .github/workflows/final-release.yml .github/workflows/pull-request-quality.yml
           git commit -m 'release: align GuildSync 0.8.1 brand and admin hotfix [skip ci]'
-          git push origin HEAD:agent/guildsync-0.8.1-brand-admin-hotfix
+          git push origin HEAD:${{ github.head_ref }}
