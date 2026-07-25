@@ -63,7 +63,7 @@ jobs:
           $ErrorActionPreference = 'Stop'
           New-Item -ItemType Directory -Force -Path out/diagnostics | Out-Null
           try {
-            ./scripts/Test-GuildSyncApi.ps1 -BackendPath "$PWD/out/backend/ClonarDC.Server.dll" -ExpectedVersion '0.8.0' *>&1 |
+            ./scripts/Test-GuildSyncApi.ps1 -BackendPath "$PWD/out/backend/ClonarDC.Server.dll" -ExpectedVersion '0.8.1' *>&1 |
               Tee-Object -FilePath out/diagnostics/api-smoke.log
           }
           catch {
