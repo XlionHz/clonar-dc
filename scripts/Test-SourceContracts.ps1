@@ -18,7 +18,7 @@ Require-Text 'src/ClonarDC.Server/Program.cs' @('/auth/logout', '/auth/logout-al
 Require-Text 'src/ClonarDC.Server/DeviceManagement.cs' @('/devices/claim', '/devices/{deviceId}', 'DeviceIdHash', 'FixedTimeDeviceHashEquals', 'ResetDevicesAsync')
 Require-Text 'src/ClonarDC.Server/StatePersistence.cs' @('GUILDSYNC_ALLOW_FILE_STORAGE', 'pg_advisory_xact_lock', 'concurrent database writer', 'revision bigint')
 Require-Text 'src/ClonarDC.Desktop/BrandPresentation.cs' @('ShieldGeometry', 'LetterGeometry', 'CreateMark', 'CreateSidebarHeader')
-Require-Text 'src/ClonarDC.Desktop/BrandIcon.cs' @('DrawingImage', 'Shield', 'Letter', 'GuildSync')
+Require-Text 'src/ClonarDC.Desktop/BrandIcon.cs' @('DrawingImage', 'Shield', 'Letter', 'LinearGradientBrush')
 Require-Text 'src/ClonarDC.Desktop/LoginWindow.xaml' @('BrandMarkHost', 'LoginCard', 'GhostCardBack', 'Welcome back', 'BackendModeText', 'LoginIntroStoryboard')
 Require-Text 'src/ClonarDC.Desktop/LoginWindow.xaml.cs' @('LOCAL DEVELOPER MODE', 'Central administrator access is unavailable', 'bootstrapDeveloper: true', 'LoginIntroStoryboard')
 Require-Text 'src/ClonarDC.Desktop/AlphaFixes.cs' @('ContentSource="SelectedContent"', 'BrandPresentation.CreateSidebarHeader', 'Pages.SelectedIndex = 0', 'MaterializeTypedServer')
