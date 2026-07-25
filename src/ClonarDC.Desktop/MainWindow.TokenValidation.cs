@@ -10,16 +10,17 @@ public partial class MainWindow
     {
         var rawValue = TokenBox.Password ?? string.Empty;
 
-        // Intentionally no format, length, prefix, bot/user or network validation here.
-        // The value is only stored locally. Discord is contacted later, when the user
-        // explicitly requests server loading or starts an operation.
+        // The desktop intentionally does not classify, normalize or reject the value here.
+        // It is stored exactly as entered. Any later service response is shown as a
+        // connection result, never as a local "token type" decision.
         if (RememberTokenCheck.IsChecked == true)
             _secureToken.Save(rawValue);
 
-        AddLog("success", LocalizeLocalTokenAccepted());
+        _discord.SetToken(rawValue);
+        AddLog("success", LocalizeTokenSaved());
         MessageBox.Show(
-            LocalizeLocalTokenAcceptedBody(),
-            "Clonar DC",
+            LocalizeTokenSavedBody(),
+            "GuildSync",
             MessageBoxButton.OK,
             MessageBoxImage.Information);
     }
@@ -31,56 +32,64 @@ public partial class MainWindow
         button.IsEnabled = false;
         var originalContent = button.Content;
         button.Content = LocalizationService.CurrentCode == "pt-BR" ? "Carregando…" : "Loading…";
-        SourceGuildBox.ItemsSource = null;
-        TargetGuildBox.ItemsSource = null;
         CloneButton.IsEnabled = false;
 
         try
         {
-            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(40));
-            var progress = new Progress<string>(message => AddLog("info", LocalizeTokenProgress(message)));
-            var result = await DiscordConnectionProbe.ValidateAndDiscoverAsync(TokenBox.Password, progress, timeout.Token);
-
-            TokenBox.Password = result.NormalizedToken;
-            _discord.SetToken(result.NormalizedToken);
+            var rawValue = TokenBox.Password ?? string.Empty;
+            _discord.SetToken(rawValue);
             if (RememberTokenCheck.IsChecked == true)
-                _secureToken.Save(TokenBox.Password);
+                _secureToken.Save(rawValue);
 
-            var guilds = result.Guilds.ToList();
-            SourceGuildBox.ItemsSource = guilds;
-            TargetGuildBox.ItemsSource = guilds.ToList();
-            if (guilds.Count > 0) SourceGuildBox.SelectedIndex = 0;
-            if (guilds.Count > 1) TargetGuildBox.SelectedIndex = 1;
+            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(45));
+            AddLog("info", LocalizationService.CurrentCode == "pt-BR"
+                ? "Consultando os servidores acessíveis…"
+                : "Loading accessible servers…");
 
-            AddLog("success", LocalizeTokenSuccess(result.BotName, guilds.Count));
+            // There is no local format, size, prefix, bot/user or identity validation.
+            // The connected service is the only authority that can accept or reject a request.
+            var guilds = await _discord.GetGuildsAsync(timeout.Token);
+            var sourceItems = guilds.ToList();
+            var targetItems = guilds.ToList();
+            SourceGuildBox.ItemsSource = sourceItems;
+            TargetGuildBox.ItemsSource = targetItems;
 
-            if (guilds.Count == 0)
+            if (sourceItems.Count > 0)
             {
-                MessageBox.Show(
-                    LocalizationService.CurrentCode == "pt-BR"
-                        ? $"Credencial aceita pelo Discord. Bot identificado: {result.BotName}.\n\nEsse bot ainda não está instalado em nenhum servidor. Adicione-o aos servidores de origem e destino e carregue novamente."
-                        : $"Discord accepted the credential. Bot: {result.BotName}.\n\nThis bot is not installed in any server yet. Add it to both the source and destination servers, then load again.",
-                    "Clonar DC",
-                    MessageBoxButton.OK,
-                    MessageBoxImage.Information);
+                SourceGuildBox.SelectedIndex = 0;
+                SourceGuildBox.Text = sourceItems[0].Name;
             }
+            if (targetItems.Count > 1)
+            {
+                TargetGuildBox.SelectedIndex = 1;
+                TargetGuildBox.Text = targetItems[1].Name;
+            }
+            else if (targetItems.Count == 1)
+            {
+                TargetGuildBox.SelectedIndex = 0;
+                TargetGuildBox.Text = targetItems[0].Name;
+            }
+
+            var success = LocalizationService.CurrentCode == "pt-BR"
+                ? $"{guilds.Count} servidor(es) carregado(s). Você também pode digitar qualquer ID manualmente."
+                : $"Loaded {guilds.Count} server(s). You can also type any server ID manually.";
+            AddLog("success", success);
         }
         catch (OperationCanceledException)
         {
             var message = LocalizationService.CurrentCode == "pt-BR"
-                ? "O carregamento demorou mais que o esperado. O valor continua no campo e não foi apagado."
-                : "Loading took longer than expected. The value remains in the field and was not removed.";
+                ? "O carregamento demorou mais que o esperado. O Token e os IDs digitados foram mantidos."
+                : "Loading took longer than expected. The Token and typed IDs were preserved.";
             AddLog("warning", message);
-            MessageBox.Show(message, "Clonar DC", MessageBoxButton.OK, MessageBoxImage.Warning);
+            MessageBox.Show(message, "GuildSync", MessageBoxButton.OK, MessageBoxImage.Warning);
         }
         catch (Exception ex)
         {
-            // Connection errors never invalidate, clear or reject the locally entered value.
             var message = LocalizationService.CurrentCode == "pt-BR"
-                ? "O valor foi aceito localmente, mas o Discord não conseguiu carregar os servidores agora.\n\n" + ex.Message
-                : "The value was accepted locally, but Discord could not load the servers right now.\n\n" + ex.Message;
+                ? "O Token foi aceito pelo aplicativo, mas o serviço não conseguiu carregar os servidores agora. Você ainda pode digitar os IDs manualmente.\n\n" + ex.Message
+                : "The app accepted the Token, but the service could not load servers now. You can still type the IDs manually.\n\n" + ex.Message;
             AddLog("warning", message);
-            MessageBox.Show(message, "Clonar DC", MessageBoxButton.OK, MessageBoxImage.Warning);
+            MessageBox.Show(message, "GuildSync", MessageBoxButton.OK, MessageBoxImage.Warning);
         }
         finally
         {
@@ -89,29 +98,13 @@ public partial class MainWindow
         }
     }
 
-    private static string LocalizeLocalTokenAccepted() =>
+    private static string LocalizeTokenSaved() =>
         LocalizationService.CurrentCode == "pt-BR"
-            ? "Valor do Token aceito localmente sem validação."
-            : "Token value accepted locally without validation.";
+            ? "Token aceito sem validação local."
+            : "Token accepted without local validation.";
 
-    private static string LocalizeLocalTokenAcceptedBody() =>
+    private static string LocalizeTokenSavedBody() =>
         LocalizationService.CurrentCode == "pt-BR"
-            ? "Pronto. O aplicativo não verificou formato, tamanho ou tipo da credencial. O Discord só será consultado quando você clicar em Carregar servidores ou iniciar uma operação."
-            : "Done. The app did not check the credential format, length, or type. Discord is contacted only when you load servers or start an operation.";
-
-    private static string LocalizeTokenProgress(string message)
-    {
-        if (LocalizationService.CurrentCode != "pt-BR") return message;
-        return message switch
-        {
-            "Checking the bot identity with Discord…" => "Conectando ao Discord para carregar os servidores…",
-            "Token accepted. Loading the servers through the Discord Gateway…" => "Conexão aceita. Carregando os servidores pelo Gateway do Discord…",
-            _ => message
-        };
-    }
-
-    private static string LocalizeTokenSuccess(string botName, int guildCount) =>
-        LocalizationService.CurrentCode == "pt-BR"
-            ? $"Conexão concluída. Bot: {botName}. {guildCount} servidor(es) encontrado(s)."
-            : $"Connection completed. Bot: {botName}. {guildCount} server(s) found.";
+            ? "Pronto. O valor foi aceito exatamente como inserido. O aplicativo não verificou formato, tamanho, prefixo ou tipo."
+            : "Done. The value was accepted exactly as entered. The app did not check its format, length, prefix, or type.";
 }
