@@ -22,7 +22,7 @@ public sealed class DiscordPreflightService : IDisposable
     public DiscordPreflightService()
     {
         _http.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
-        _http.DefaultRequestHeaders.UserAgent.ParseAdd("GuildSync-Preflight/0.8.0");
+        _http.DefaultRequestHeaders.UserAgent.ParseAdd("GuildSync-Preflight/0.8.1");
     }
 
     public void SetToken(string token)

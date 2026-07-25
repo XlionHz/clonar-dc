@@ -6,7 +6,7 @@ using System.Text;
 using System.Text.Json;
 
 const string ProductName = "GuildSync API";
-const string DefaultVersion = "0.8.0";
+const string DefaultVersion = "0.8.1";
 
 var builder = WebApplication.CreateBuilder(args);
 var environmentName = Environment.GetEnvironmentVariable("GUILDSYNC_ENV")
@@ -353,26 +353,80 @@ sealed partial class JsonStore
     public async Task EnsureBootstrapAdminAsync(string? email, string? password)
     {
         if (string.IsNullOrWhiteSpace(email) || string.IsNullOrWhiteSpace(password)) return;
-        if (!InputValidation.IsValidEmail(email.Trim()) || password.Length < 14)
+        email = NormalizeEmail(email);
+        if (!InputValidation.IsValidEmail(email) || password.Length < 14)
             throw new InvalidOperationException("The bootstrap administrator requires a valid email and a password with at least 14 characters.");
 
         await _gate.WaitAsync();
         try
         {
-            if (_db.Users.Any(user => string.Equals(user.Role, "admin", StringComparison.OrdinalIgnoreCase))) return;
-            var (salt, hash) = Passwords.Hash(password);
-            _db.Users.Add(new UserRecord
+            var user = _db.Users.FirstOrDefault(item =>
+                string.Equals(item.Email, email, StringComparison.OrdinalIgnoreCase));
+            var created = user is null;
+            user ??= new UserRecord
             {
                 Name = "Administrator",
-                Email = NormalizeEmail(email),
-                PasswordSalt = salt,
-                PasswordHash = hash,
-                Role = "admin",
-                Status = "active",
-                LicenseLabel = "Permanent",
-                DeviceLimit = 5
-            });
-            _db.Audit.Add(new(DateTimeOffset.UtcNow, "system", "bootstrap-admin-created", "admin", string.Empty));
+                Email = email,
+                CreatedAt = DateTimeOffset.UtcNow
+            };
+
+            var changed = created;
+            var passwordMatches = false;
+            try
+            {
+                passwordMatches = !string.IsNullOrWhiteSpace(user.PasswordSalt) &&
+                                  !string.IsNullOrWhiteSpace(user.PasswordHash) &&
+                                  Passwords.Verify(password, user.PasswordSalt, user.PasswordHash);
+            }
+            catch
+            {
+                passwordMatches = false;
+            }
+
+            if (!passwordMatches)
+            {
+                var credentials = Passwords.Hash(password);
+                user.PasswordSalt = credentials.Salt;
+                user.PasswordHash = credentials.Hash;
+                _db.Sessions.RemoveAll(session => session.UserId == user.Id);
+                changed = true;
+            }
+
+            if (!string.Equals(user.Role, "admin", StringComparison.OrdinalIgnoreCase))
+            {
+                user.Role = "admin";
+                changed = true;
+            }
+            if (!string.Equals(user.Status, "active", StringComparison.OrdinalIgnoreCase))
+            {
+                user.Status = "active";
+                changed = true;
+            }
+            if (!string.Equals(user.LicenseLabel, "Permanent", StringComparison.Ordinal))
+            {
+                user.LicenseLabel = "Permanent";
+                changed = true;
+            }
+            if (user.ExpiresAt is not null)
+            {
+                user.ExpiresAt = null;
+                changed = true;
+            }
+            if (user.DeviceLimit < 5)
+            {
+                user.DeviceLimit = 5;
+                changed = true;
+            }
+
+            if (created) _db.Users.Add(user);
+            if (!changed) return;
+
+            _db.Audit.Add(new(
+                DateTimeOffset.UtcNow,
+                "system",
+                created ? "bootstrap-admin-created" : "bootstrap-admin-synchronized",
+                user.Id,
+                user.Email));
             await SaveUnsafeAsync();
         }
         finally
@@ -768,6 +822,8 @@ static class Passwords
         }
     }
 }
+
+
 
 
 

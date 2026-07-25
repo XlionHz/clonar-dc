@@ -2,39 +2,89 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="GuildSync" Icon="/ClonarDC;component/Assets/GuildSync.ico"
-        Width="980" Height="620" WindowStartupLocation="CenterScreen" ResizeMode="CanMinimize">
+        Width="1040" Height="650" MinWidth="920" MinHeight="590"
+        WindowStartupLocation="CenterScreen" ResizeMode="CanMinimize">
     <Grid>
-        <Grid.ColumnDefinitions><ColumnDefinition Width="1.05*"/><ColumnDefinition Width="0.95*"/></Grid.ColumnDefinitions>
-        <Border Grid.Column="0" Background="#0B0C14" Padding="60">
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="1.08*"/>
+            <ColumnDefinition Width="0.92*"/>
+        </Grid.ColumnDefinitions>
+
+        <Border Grid.Column="0" Padding="58">
+            <Border.Background>
+                <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                    <GradientStop Color="#0B0C14" Offset="0"/>
+                    <GradientStop Color="#111329" Offset="0.56"/>
+                    <GradientStop Color="#17112A" Offset="1"/>
+                </LinearGradientBrush>
+            </Border.Background>
             <Grid>
-                <StackPanel VerticalAlignment="Center">
-                    <Image Source="/ClonarDC;component/Assets/GuildSyncLogo.png" Width="150" Height="150" HorizontalAlignment="Left" Margin="0,0,0,26"/>
-                    <TextBlock Text="GuildSync" FontSize="42" FontWeight="Bold"/>
-                    <TextBlock Text="SYNC  •  CLONE  •  SCALE" FontSize="13" FontWeight="SemiBold" Foreground="#60A5FA" Margin="0,12,0,0"/>
-                    <TextBlock Text="Backup, clone and protect Discord communities with precision." FontSize="18" Foreground="{StaticResource MutedBrush}" Margin="0,18,0,0" TextWrapping="Wrap" MaxWidth="390"/>
+                <Ellipse Width="330" Height="330" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="-190,-190,0,0" Fill="#17284CFF" IsHitTestVisible="False"/>
+                <Ellipse Width="260" Height="260" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,-170,-170" Fill="#162C1D54" IsHitTestVisible="False"/>
+
+                <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" MaxWidth="430">
+                    <ContentControl x:Name="BrandMarkHost"
+                                    Width="146" Height="146"
+                                    HorizontalContentAlignment="Center"
+                                    VerticalContentAlignment="Center"
+                                    Margin="0,0,0,18"/>
+                    <TextBlock HorizontalAlignment="Center" TextAlignment="Center" FontSize="46" FontWeight="Bold" Foreground="#F8F9FF">
+                        <Run Text="Guild"/><Run Text="Sync" Foreground="#7C83FF"/>
+                    </TextBlock>
+                    <TextBlock Text="SYNC  •  CLONE  •  SCALE"
+                               HorizontalAlignment="Center" TextAlignment="Center"
+                               FontSize="12" FontWeight="SemiBold" Foreground="#9CA2FF"
+                               Margin="0,12,0,0"/>
+                    <TextBlock Text="Backup, clone and protect Discord communities with precision."
+                               HorizontalAlignment="Center" TextAlignment="Center"
+                               FontSize="17" Foreground="#A8AABC"
+                               Margin="0,18,0,0" TextWrapping="Wrap" MaxWidth="390"/>
+                    <Border Background="#151728" BorderBrush="#34375A" BorderThickness="1" CornerRadius="20"
+                            Padding="14,7" HorizontalAlignment="Center" Margin="0,28,0,0">
+                        <TextBlock Text="OFFICIAL DISCORD API  •  LOCAL TOKEN STORAGE"
+                                   FontSize="9" FontWeight="SemiBold" Foreground="#8F93AE"/>
+                    </Border>
                 </StackPanel>
-                <TextBlock Text="GUILDSYNC" VerticalAlignment="Bottom" HorizontalAlignment="Left" Foreground="#444A63" FontSize="10" FontWeight="SemiBold"/>
+
+                <TextBlock Text="GUILDSYNC  •  ALPHA"
+                           VerticalAlignment="Bottom" HorizontalAlignment="Center"
+                           Foreground="#5D6079" FontSize="10" FontWeight="SemiBold"/>
             </Grid>
         </Border>
-        <Border Grid.Column="1" Background="{StaticResource PanelBrush}" Padding="54">
-            <StackPanel VerticalAlignment="Center">
-                <TextBlock Text="Sign in" FontSize="28" FontWeight="Bold"/>
-                <TextBlock Text="Access your GuildSync account" Foreground="{StaticResource MutedBrush}" Margin="0,6,0,24"/>
-                <TextBlock Text="Email" Margin="0,0,0,6"/>
-                <TextBox x:Name="EmailBox" Height="42"/>
-                <TextBlock Text="Password" Margin="0,16,0,6"/>
-                <PasswordBox x:Name="PasswordBox" Height="42"/>
-                <Button x:Name="LoginButton" Style="{StaticResource PrimaryButton}" Content="Sign in" Height="44" Margin="0,22,0,0" Click="LoginButton_Click"/>
-                <Button Content="Create account" Height="42" Margin="0,10,0,0" Click="RegisterButton_Click"/>
-                <TextBlock x:Name="StatusText" Foreground="{StaticResource MutedBrush}" TextWrapping="Wrap" Margin="0,18,0,0"/>
-                <Border x:Name="PendingBox" Visibility="Collapsed" Background="#211936" BorderBrush="#6D28D9" BorderThickness="1" CornerRadius="10" Padding="15" Margin="0,18,0,0">
+
+        <Border Grid.Column="1" Background="#11131C" Padding="58">
+            <Grid>
+                <Border VerticalAlignment="Center" Background="#171923" BorderBrush="#2D3041" BorderThickness="1"
+                        CornerRadius="18" Padding="34">
                     <StackPanel>
-                        <TextBlock Text="License required" FontWeight="Bold" FontSize="16"/>
-                        <TextBlock Text="Status: Pending" Foreground="#C4B5FD" Margin="0,5,0,0"/>
-                        <TextBlock Text="Sign in to choose a plan, or connect your account with the official GuildSync bot." Foreground="{StaticResource MutedBrush}" TextWrapping="Wrap" Margin="0,6,0,0"/>
+                        <TextBlock Text="Welcome back" FontSize="30" FontWeight="Bold" Foreground="#F8F9FF"/>
+                        <TextBlock Text="Sign in to your GuildSync account" Foreground="#989BAC" Margin="0,7,0,26"/>
+
+                        <TextBlock Text="Email" Foreground="#D8D9E2" Margin="0,0,0,7"/>
+                        <TextBox x:Name="EmailBox" Height="43"/>
+                        <TextBlock Text="Password" Foreground="#D8D9E2" Margin="0,17,0,7"/>
+                        <PasswordBox x:Name="PasswordBox" Height="43"/>
+
+                        <Button x:Name="LoginButton" Style="{StaticResource PrimaryButton}" Content="Sign in"
+                                Height="45" Margin="0,23,0,0" Click="LoginButton_Click"/>
+                        <Button Content="Create account" Height="42" Margin="0,10,0,0" Click="RegisterButton_Click"/>
+
+                        <TextBlock x:Name="BackendModeText" Foreground="#8F93AE" FontSize="11"
+                                   TextWrapping="Wrap" Margin="0,15,0,0"/>
+                        <TextBlock x:Name="StatusText" Foreground="#B8BAC8" TextWrapping="Wrap" Margin="0,12,0,0"/>
+
+                        <Border x:Name="PendingBox" Visibility="Collapsed" Background="#211936" BorderBrush="#6D28D9"
+                                BorderThickness="1" CornerRadius="10" Padding="15" Margin="0,18,0,0">
+                            <StackPanel>
+                                <TextBlock Text="License required" FontWeight="Bold" FontSize="16"/>
+                                <TextBlock Text="Status: Pending" Foreground="#C4B5FD" Margin="0,5,0,0"/>
+                                <TextBlock Text="Sign in to choose a plan, or connect your account with the official GuildSync bot."
+                                           Foreground="#A8AABC" TextWrapping="Wrap" Margin="0,6,0,0"/>
+                            </StackPanel>
+                        </Border>
                     </StackPanel>
                 </Border>
-            </StackPanel>
+            </Grid>
         </Border>
     </Grid>
 </Window>

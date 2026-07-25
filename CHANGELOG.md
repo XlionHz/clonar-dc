@@ -2,6 +2,27 @@
 
 All notable GuildSync changes are documented here.
 
+## [0.8.1] - 2026-07-25
+
+### Branding and desktop
+
+- Rebuilt the sign-in identity panel with a centered GuildSync wordmark and a cropped presentation of the existing mark.
+- Added a reusable branded sidebar header so the product identity remains visible inside the application.
+- Replaced the tab-header hiding workaround that could collapse the selected page and leave the main area empty.
+- The application now opens directly on Overview and displays the real installed assembly version.
+
+### Administrator access
+
+- The central API now reconciles the specifically configured administrator email instead of stopping when any administrator already exists.
+- The configured account is promoted to administrator, reactivated, assigned a permanent license and synchronized with the configured password when needed.
+- Existing sessions are revoked only when the configured administrator password changes.
+- Added a clearly labelled isolated local developer fallback when the central administrator cannot be reached; it never pretends to administer the public database.
+
+### Release validation
+
+- Aligned desktop, API, bot, installer, runtime identifiers and update packaging to 0.8.1.
+- Added source contracts for cropped branding, Overview rendering, administrator reconciliation and explicit local developer mode.
+
 ## [0.8.0] - 2026-07-25
 
 ### Clone and restore engine
@@ -68,7 +89,7 @@ All notable GuildSync changes are documented here.
 
 - Production now requires PostgreSQL unless file storage is explicitly approved.
 - Local JSON writes are atomic and keep a last-known backup.
-- PostgreSQL state writes now use advisory locking and optimistic revision checks to prevent silent concurrent overwrites.
+- PostgreSQL state writes now use advisory locking and optimistic revision checks to prevent silent overwrites by multiple API instances.
 
 ### Discord bot
 

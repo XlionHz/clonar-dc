@@ -19,7 +19,7 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 70
     env:
-      APP_VERSION: '0.8.0'
+      APP_VERSION: '0.8.1'
 
     steps:
       - name: Checkout
@@ -55,9 +55,9 @@ jobs:
           $ErrorActionPreference = 'Stop'
           $fullVersion = "$env:APP_VERSION.$env:GITHUB_RUN_NUMBER"
           New-Item -ItemType Directory -Force -Path out/app,out/backend,out/bot,out/installer | Out-Null
-          dotnet publish ./src/ClonarDC.Desktop/ClonarDC.Desktop.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=false -p:DebugType=None -p:DebugSymbols=false -p:Version=$env:APP_VERSION -p:FileVersion=$fullVersion -p:AssemblyVersion=0.8.0.0 -o out/app
-          dotnet publish ./src/ClonarDC.Server/ClonarDC.Server.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=false -p:DebugType=None -p:DebugSymbols=false -p:Version=$env:APP_VERSION -p:FileVersion=$fullVersion -p:AssemblyVersion=0.8.0.0 -o out/backend
-          dotnet publish ./src/GuildSync.Bot/GuildSync.Bot.csproj -c Release -r linux-x64 --self-contained false -p:DebugType=None -p:DebugSymbols=false -p:Version=$env:APP_VERSION -p:AssemblyVersion=0.8.0.0 -o out/bot
+          dotnet publish ./src/ClonarDC.Desktop/ClonarDC.Desktop.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=false -p:DebugType=None -p:DebugSymbols=false -p:Version=$env:APP_VERSION -p:FileVersion=$fullVersion -p:AssemblyVersion=0.8.1.0 -o out/app
+          dotnet publish ./src/ClonarDC.Server/ClonarDC.Server.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=false -p:DebugType=None -p:DebugSymbols=false -p:Version=$env:APP_VERSION -p:FileVersion=$fullVersion -p:AssemblyVersion=0.8.1.0 -o out/backend
+          dotnet publish ./src/GuildSync.Bot/GuildSync.Bot.csproj -c Release -r linux-x64 --self-contained false -p:DebugType=None -p:DebugSymbols=false -p:Version=$env:APP_VERSION -p:AssemblyVersion=0.8.1.0 -o out/bot
           if (-not (Test-Path out/app/ClonarDC.exe)) { throw 'GuildSync desktop executable was not generated.' }
           if (-not (Test-Path out/app/api-url.txt)) { throw 'api-url.txt was not published.' }
           if (-not (Test-Path out/backend/ClonarDC.Server.exe)) { throw 'GuildSync API executable was not generated.' }
@@ -103,7 +103,7 @@ jobs:
             version = $env:APP_VERSION
             tag = "v$env:APP_VERSION"
             title = "GuildSync $env:APP_VERSION"
-            notes = 'Resumable and verified cloning engine, backup format v2, Discord permission preflight, licensed-device enforcement and expanded reliability diagnostics.'
+            notes = 'Brand presentation and main-window rendering fix, configured administrator reconciliation, and clearly labelled local developer fallback.'
             setupFile = 'GuildSync-Setup.exe'
             sha256 = $hash
           } | ConvertTo-Json -Depth 4 | Set-Content (Join-Path $packageRoot 'manifest.json') -Encoding UTF8
@@ -130,7 +130,7 @@ jobs:
           if ((Get-Content (Join-Path $root 'api-url.txt') -Raw).Trim() -ne 'https://clonar-dc-api.onrender.com') { throw 'Installed central API URL is incorrect.' }
           $installedVersion = (Get-Item (Join-Path $root 'ClonarDC.exe')).VersionInfo.ProductVersion
           if (-not $installedVersion.StartsWith($env:APP_VERSION)) { throw "Installed desktop version is unexpected: $installedVersion" }
-          'GuildSync 0.8 installer passed.' | Set-Content out/installer-smoke.txt
+          'GuildSync 0.8.1 installer passed.' | Set-Content out/installer-smoke.txt
 
       - name: Upload verified artifacts
         uses: actions/upload-artifact@v4
@@ -160,7 +160,7 @@ jobs:
           $ErrorActionPreference = 'Stop'
           $tag = "v$env:APP_VERSION-alpha.$env:GITHUB_RUN_NUMBER"
           $title = "GuildSync $env:APP_VERSION Alpha $env:GITHUB_RUN_NUMBER"
-          $notes = 'Resumable engine, post-operation verification, backup v2, Discord permission preflight, device limits and expanded production safeguards.'
+          $notes = 'Brand layout and main-window rendering corrected; central administrator reconciliation and explicit local developer fallback added.'
           $assets = @(
             'out/installer/GuildSync-Setup.exe',
             'out/installer/GuildSync-Setup.sha256',
@@ -179,7 +179,6 @@ jobs:
 
           & gh release upload $tag @assets --clobber
           if ($LASTEXITCODE -ne 0) { throw "Could not upload assets to prerelease $tag." }
-          "RELEASE_TAG=$tag" | Add-Content $env:GITHUB_ENV
 
       - name: Report release publication warning
         if: steps.publish_release.outcome == 'failure'
@@ -201,7 +200,7 @@ jobs:
             "Release publication: ${{ steps.publish_release.outcome }}",
             "SHA-256: $hash",
             '',
-            'Validation: desktop, API and bot compiled; engine reliability, backup v2, device limits, session revocation, runtime, installer and update package verified.'
+            'Validation: desktop, API and bot compiled; branding contracts, administrator reconciliation, API behavior, runtime, installer and update package verified.'
           ) | Set-Content build-status/latest.md -Encoding UTF8
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
