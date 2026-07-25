@@ -6,7 +6,7 @@ using System.Text;
 using System.Text.Json;
 
 const string ProductName = "GuildSync API";
-const string DefaultVersion = "0.7.1";
+const string DefaultVersion = "0.8.0";
 
 var builder = WebApplication.CreateBuilder(args);
 var environmentName = Environment.GetEnvironmentVariable("GUILDSYNC_ENV")
@@ -107,7 +107,8 @@ app.MapGet("/status", () => Results.Ok(new
     storage = persistence.Kind,
     paymentsConfigured = paymentOptions.IsCheckoutConfigured,
     webhookConfigured = paymentOptions.IsWebhookConfigured,
-    discordIntegrationConfigured = !string.IsNullOrWhiteSpace(discordBotApiKey)
+    discordIntegrationConfigured = !string.IsNullOrWhiteSpace(discordBotApiKey),
+    deviceIdentityRequired = DevicePolicy.RequireIdentity
 }));
 
 app.MapPost("/auth/register", async (RegisterRequest request, HttpContext context) =>
@@ -137,7 +138,11 @@ app.MapPost("/auth/login", async (LoginRequest request, HttpContext context) =>
     if (!loginAttempts.TryAcquire(rateKey))
         return Results.Json(new { error = "Muitas tentativas. Aguarde alguns minutos." }, statusCode: StatusCodes.Status429TooManyRequests);
 
-    var result = await store.LoginAsync(normalizedEmail, request.Password ?? string.Empty);
+    var result = await store.LoginAsync(
+        normalizedEmail,
+        request.Password ?? string.Empty,
+        request.DeviceId,
+        request.DeviceName);
     if (!result.Ok)
         return Results.Json(new { error = result.Error }, statusCode: StatusCodes.Status401Unauthorized);
 
@@ -156,7 +161,8 @@ app.MapPost("/auth/login", async (LoginRequest request, HttpContext context) =>
         {
             status = result.User.Status,
             expiresAt = result.User.ExpiresAt,
-            deviceLimit = result.User.DeviceLimit
+            deviceLimit = result.User.DeviceLimit,
+            deviceCount = result.User.DeviceCount
         }
     });
 });
@@ -189,7 +195,8 @@ app.MapGet("/me", async (HttpContext context) =>
         role = user.Role,
         status = user.Status,
         expiresAt = user.ExpiresAt,
-        deviceLimit = user.DeviceLimit
+        deviceLimit = user.DeviceLimit,
+        deviceCount = user.DeviceCount
     });
 });
 
@@ -210,6 +217,7 @@ app.MapGet("/admin/users", async (HttpContext context) =>
         usageSeconds = user.UsageSeconds,
         devices = user.DeviceCount,
         deviceLimit = user.DeviceLimit,
+        deviceCount = user.DeviceCount,
         createdAt = user.CreatedAt
     }));
 });
@@ -228,6 +236,7 @@ app.MapGet("/admin/audit", async (HttpContext context) =>
     return admin is null ? Results.Unauthorized() : Results.Ok(await store.ListAuditAsync());
 });
 
+app.MapDeviceManagementEndpoints(store);
 app.MapMercadoPagoEndpoints(store, mercadoPago, paymentOptions);
 app.MapDiscordIntegrationEndpoints(store, mercadoPago, paymentOptions, discordBotApiKey);
 app.Run();
@@ -262,7 +271,7 @@ static async Task<UserRecord?> RequireAdminAsync(HttpContext context, JsonStore 
 }
 
 record RegisterRequest(string? Name, string? Email, string? Password);
-record LoginRequest(string? Email, string? Password);
+record LoginRequest(string? Email, string? Password, string? DeviceId, string? DeviceName);
 record AdminActionRequest(string? License);
 record OpResult(bool Ok, string? Error = null);
 record LoginResult(bool Ok, string? Error, string? Token, UserRecord? User);
@@ -296,6 +305,7 @@ sealed class SessionRecord
 {
     public string TokenHash { get; set; } = string.Empty;
     public string UserId { get; set; } = string.Empty;
+    public string DeviceIdHash { get; set; } = string.Empty;
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
     public DateTimeOffset LastSeenAt { get; set; } = DateTimeOffset.UtcNow;
     public DateTimeOffset ExpiresAt { get; set; } = DateTimeOffset.UtcNow.AddHours(12);
@@ -327,6 +337,7 @@ sealed partial class JsonStore
             _db.Users ??= [];
             _db.Sessions ??= [];
             _db.Audit ??= [];
+            _db.Devices ??= [];
             _db.Payments ??= [];
             _db.DiscordLinks ??= [];
             _db.DiscordLinkCodes ??= [];
@@ -398,7 +409,7 @@ sealed partial class JsonStore
         }
     }
 
-    public async Task<LoginResult> LoginAsync(string email, string password)
+    public async Task<LoginResult> LoginAsync(string email, string password, string? deviceId, string? deviceName)
     {
         email = NormalizeEmail(email);
         await _gate.WaitAsync();
@@ -421,6 +432,18 @@ sealed partial class JsonStore
                 user.LicenseLabel = "Expired";
             }
 
+            DeviceClaimResult? deviceResult = null;
+            if (!string.IsNullOrWhiteSpace(deviceId))
+            {
+                deviceResult = ClaimDeviceUnsafe(user, deviceId, deviceName, now);
+                if (!deviceResult.Ok)
+                    return new(false, deviceResult.Error, null, null);
+            }
+            else if (DevicePolicy.RequireIdentity)
+            {
+                return new(false, "Atualize o GuildSync para registrar este dispositivo.", null, null);
+            }
+
             user.LastAccess = now;
             _db.Sessions.RemoveAll(session => session.UserId == user.Id && session.ExpiresAt <= now);
             var activeSessions = _db.Sessions
@@ -434,6 +457,7 @@ sealed partial class JsonStore
             _db.Sessions.Add(new SessionRecord
             {
                 UserId = user.Id,
+                DeviceIdHash = deviceResult?.Record?.DeviceIdHash ?? string.Empty,
                 TokenHash = HashToken(token),
                 CreatedAt = now,
                 LastSeenAt = now,
@@ -472,6 +496,7 @@ sealed partial class JsonStore
             }
 
             session.LastSeenAt = now;
+            TouchDeviceUnsafe(user.Id, session.DeviceIdHash, now);
             return CloneUser(user);
         }
         finally
@@ -569,7 +594,7 @@ sealed partial class JsonStore
                     _db.Sessions.RemoveAll(session => session.UserId == user.Id);
                     break;
                 case "reset-devices":
-                    user.DeviceCount = 0;
+                    ResetDevicesUnsafe(user.Id);
                     break;
                 default:
                     return new(false, "Ação administrativa desconhecida.");
@@ -743,3 +768,4 @@ static class Passwords
         }
     }
 }
+
