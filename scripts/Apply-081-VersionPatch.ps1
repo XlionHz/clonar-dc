@@ -1,6 +1,6 @@
 $ErrorActionPreference = 'Stop'
 
-function Replace-Required {
+function Replace-IfPresent {
     param(
         [Parameter(Mandatory = $true)][string]$Path,
         [Parameter(Mandatory = $true)][string]$Old,
@@ -8,14 +8,13 @@ function Replace-Required {
     )
 
     $content = Get-Content $Path -Raw
-    if ($content.Contains($New)) {
-        Write-Host "$Path already contains $New"
+    if (-not $content.Contains($Old)) {
+        Write-Host "$Path has no remaining '$Old' value."
         return
     }
-    if (-not $content.Contains($Old)) {
-        throw "$Path does not contain required value: $Old"
-    }
+
     Set-Content $Path ($content.Replace($Old, $New)) -Encoding UTF8
+    Write-Host "$Path updated to $New"
 }
 
 $files = @(
@@ -37,9 +36,9 @@ $files = @(
 )
 
 foreach ($file in $files) {
-    Replace-Required -Path $file -Old '0.8.0' -New '0.8.1'
+    Replace-IfPresent -Path $file -Old '0.8.0' -New '0.8.1'
 }
 
-Replace-Required -Path 'README.md' -Old '> Current development release: **0.8.0 alpha**' -New '> Current development release: **0.8.1 alpha**'
+Replace-IfPresent -Path 'README.md' -Old '> Current development release: **0.8.0 alpha**' -New '> Current development release: **0.8.1 alpha**'
 
 Write-Host 'GuildSync runtime, installer and CI versions are aligned to 0.8.1.'
