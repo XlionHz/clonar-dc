@@ -1,0 +1,40 @@
+name: Apply GuildSync 0.8.1 Admin Reconciliation
+
+on:
+  push:
+    branches: [ agent/guildsync-0.8.1-brand-admin-hotfix ]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: guildsync-081-admin-reconcile
+  cancel-in-progress: true
+
+jobs:
+  integrate:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout hotfix branch
+        uses: actions/checkout@v4
+        with:
+          ref: agent/guildsync-0.8.1-brand-admin-hotfix
+          fetch-depth: 0
+
+      - name: Apply administrator reconciliation
+        shell: pwsh
+        run: ./scripts/Apply-081-AdminReconcile.ps1
+
+      - name: Commit generated server change
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if (-not (git status --porcelain -- src/ClonarDC.Server/Program.cs)) {
+            Write-Host 'Program.cs already contains the hotfix.'
+            exit 0
+          }
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/ClonarDC.Server/Program.cs
+          git commit -m 'auth: reconcile configured administrator credentials [skip ci]'
+          git push origin HEAD:agent/guildsync-0.8.1-brand-admin-hotfix
