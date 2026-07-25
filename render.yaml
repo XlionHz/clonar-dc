@@ -12,29 +12,37 @@ services:
         fromDatabase:
           name: clonar-dc-db
           property: connectionString
-      - key: CLONARDC_ENV
+      - key: GUILDSYNC_ENV
         value: staging
-      - key: CLONARDC_ADMIN_EMAIL
+      - key: GUILDSYNC_ADMIN_EMAIL
         sync: false
-      - key: CLONARDC_ADMIN_PASSWORD
+      - key: GUILDSYNC_ADMIN_PASSWORD
         sync: false
       - key: GUILDSYNC_BOT_API_KEY
         sync: false
+      - key: GUILDSYNC_SESSION_HOURS
+        value: "12"
+      - key: GUILDSYNC_ALLOW_FILE_STORAGE
+        value: "false"
       - key: MERCADOPAGO_ACCESS_TOKEN
         sync: false
       - key: MERCADOPAGO_WEBHOOK_SECRET
         sync: false
       - key: MERCADOPAGO_USE_SANDBOX
         value: "true"
-      - key: CLONARDC_PRICE_1M
+      - key: MERCADOPAGO_ALLOW_UNSIGNED_WEBHOOKS
+        value: "false"
+      - key: GUILDSYNC_PAYMENT_CURRENCY
+        value: BRL
+      - key: GUILDSYNC_PRICE_1M
         value: "1.00"
-      - key: CLONARDC_PRICE_3M
+      - key: GUILDSYNC_PRICE_3M
         value: "0"
-      - key: CLONARDC_PRICE_6M
+      - key: GUILDSYNC_PRICE_6M
         value: "0"
-      - key: CLONARDC_PRICE_12M
+      - key: GUILDSYNC_PRICE_12M
         value: "0"
-      - key: CLONARDC_PRICE_PERMANENT
+      - key: GUILDSYNC_PRICE_PERMANENT
         value: "0"
 
 databases:
