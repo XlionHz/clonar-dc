@@ -59,7 +59,17 @@ jobs:
 
       - name: Run API behavior smoke test
         shell: pwsh
-        run: ./scripts/Test-GuildSyncApi.ps1 -BackendPath "$PWD/out/backend/ClonarDC.Server.dll" -ExpectedVersion '0.8.0'
+        run: |
+          $ErrorActionPreference = 'Stop'
+          New-Item -ItemType Directory -Force -Path out/diagnostics | Out-Null
+          try {
+            ./scripts/Test-GuildSyncApi.ps1 -BackendPath "$PWD/out/backend/ClonarDC.Server.dll" -ExpectedVersion '0.8.0' *>&1 |
+              Tee-Object -FilePath out/diagnostics/api-smoke.log
+          }
+          catch {
+            $_ | Format-List * -Force | Out-String | Tee-Object -FilePath out/diagnostics/api-smoke.log -Append
+            throw
+          }
 
       - name: Upload diagnostics
         if: always()
@@ -71,5 +81,6 @@ jobs:
             src/**/bin/**/*.runtimeconfig.json
             out/backend/*.deps.json
             out/backend/*.runtimeconfig.json
+            out/diagnostics/**
           if-no-files-found: ignore
           retention-days: 7
