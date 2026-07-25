@@ -31,7 +31,7 @@ jobs:
 
       - name: Prepare diagnostics
         shell: pwsh
-        run: New-Item -ItemType Directory -Force -Path out/diagnostics,out/desktop-build | Out-Null
+        run: New-Item -ItemType Directory -Force -Path out/diagnostics,out/desktop-test | Out-Null
 
       - name: Verify source contracts and secrets
         shell: pwsh
@@ -49,17 +49,24 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          dotnet build ./src/ClonarDC.Desktop/ClonarDC.Desktop.csproj -c Release --no-restore -o out/desktop-build
+          dotnet build ./src/ClonarDC.Desktop/ClonarDC.Desktop.csproj -c Release --no-restore
           dotnet build ./src/ClonarDC.Server/ClonarDC.Server.csproj -c Release --no-restore
           dotnet build ./src/GuildSync.Bot/GuildSync.Bot.csproj -c Release --no-restore
-          if (-not (Test-Path out/desktop-build/ClonarDC.dll)) { throw 'Deterministic desktop assembly was not generated.' }
+          dotnet publish ./src/ClonarDC.Desktop/ClonarDC.Desktop.csproj -c Release --no-restore --self-contained false -p:DebugType=None -p:DebugSymbols=false -o out/desktop-test
+          $assembly = Get-ChildItem out/desktop-test -Filter 'ClonarDC.dll' -File | Select-Object -First 1
+          if ($null -eq $assembly) {
+            Get-ChildItem out/desktop-test | Format-Table Name,Length | Out-String | Write-Host
+            throw 'Deterministic desktop assembly was not generated.'
+          }
+          $assembly.FullName | Set-Content out/desktop-assembly-path.txt
 
       - name: Test engine reliability contracts
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
           try {
-            ./scripts/Test-EngineReliability.ps1 -DesktopAssembly "$PWD/out/desktop-build/ClonarDC.dll" *>&1 |
+            $desktopAssembly = (Get-Content out/desktop-assembly-path.txt -Raw).Trim()
+            ./scripts/Test-EngineReliability.ps1 -DesktopAssembly $desktopAssembly *>&1 |
               Tee-Object -FilePath out/diagnostics/engine-reliability.log
           }
           catch {
@@ -106,8 +113,8 @@ jobs:
         with:
           name: guildsync-pr-diagnostics
           path: |
-            out/desktop-build/*.deps.json
-            out/desktop-build/*.runtimeconfig.json
+            out/desktop-test/*.deps.json
+            out/desktop-test/*.runtimeconfig.json
             out/backend/*.deps.json
             out/backend/*.runtimeconfig.json
             out/diagnostics/**
