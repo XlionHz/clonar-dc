@@ -1,8 +1,8 @@
 name: Apply GuildSync 0.8.2 patch
 
 on:
-  push:
-    branches: [ agent/guildsync-0.8.2-login-experience ]
+  pull_request:
+    branches: [ main ]
     paths: [ .github/workflows/apply-guildsync-082.yml ]
 
 permissions:
@@ -10,11 +10,12 @@ permissions:
 
 jobs:
   apply:
+    if: github.actor != 'github-actions[bot]'
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: agent/guildsync-0.8.2-login-experience
+          ref: ${{ github.event.pull_request.head.ref }}
           fetch-depth: 0
 
       - name: Generate final GuildSync assets
@@ -171,4 +172,4 @@ jobs:
           git config user.email 'actions@users.noreply.github.com'
           git add -A
           git commit -m 'release: complete GuildSync 0.8.2 login, branding and input fixes'
-          git push origin HEAD:agent/guildsync-0.8.2-login-experience
+          git push origin HEAD:${{ github.event.pull_request.head.ref }}
