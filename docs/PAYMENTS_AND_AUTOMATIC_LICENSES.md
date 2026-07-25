@@ -2,7 +2,7 @@
 
 ## Goal
 
-A customer pays for a Clonar DC plan and the account is activated automatically without manual approval.
+A customer pays for a GuildSync plan and the account is activated automatically without manual approval.
 
 ## Recommended architecture
 
@@ -11,7 +11,7 @@ Discord command or website checkout
         ↓
 Stripe Checkout (global) / Mercado Pago (Brazil)
         ↓ signed webhook
-Clonar DC central HTTPS backend
+GuildSync central HTTPS backend
         ↓
 Verify payment with provider API
         ↓
@@ -55,7 +55,7 @@ Suggested commands:
 
 - `/buy` — shows plan buttons and creates checkout.
 - `/license` — shows current plan and expiration.
-- `/link` — links a Discord account to an existing Clonar DC account using a short-lived one-time code.
+- `/link` — links a Discord account to an existing GuildSync account using a short-lived one-time code.
 - `/unlink` — removes the Discord link after confirmation.
 
 After an approved payment, the bot can assign a customer role. It needs `MANAGE_ROLES`, and its highest role must be above the customer role.
@@ -65,7 +65,7 @@ After an approved payment, the bot can assign a customer role. It needs `MANAGE_
 - Provider secret keys and Discord bot token exist only on the server.
 - The desktop app never receives payment-provider credentials.
 - Webhook secrets are stored as deployment secrets.
-- Checkout creation requires an authenticated Clonar DC account or a signed, short-lived link code.
+- Checkout creation requires an authenticated GuildSync account or a signed, short-lived link code.
 - License updates are server-side only.
 - Use HTTPS in production.
 - Add rate limits and audit logs.

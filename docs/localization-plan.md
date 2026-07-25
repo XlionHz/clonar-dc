@@ -9,4 +9,4 @@ Supported installer and application languages:
 - Français (`fr-FR`)
 - Deutsch (`de-DE`)
 
-The installer stores the selected language under the current user's Clonar DC settings. The desktop app reads that value before opening its first window and falls back to English for unknown or missing values.
+The installer stores the selected language under the current user's GuildSync settings. The desktop app reads that value before opening its first window and falls back to English for unknown or missing values.

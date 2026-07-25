@@ -1,4 +1,6 @@
 using System.Windows;
+using System.Windows.Media.Animation;
+using System.Windows.Threading;
 using ClonarDC.Services;
 
 namespace ClonarDC;
@@ -7,6 +9,7 @@ public partial class LoginWindow : Window
 {
     private const string LocalDeveloperUrl = "http://127.0.0.1:8787";
     private AuthClient _auth;
+    private bool _introPlayed;
 
     public AppSession? Session { get; private set; }
     public bool IsLocalDeveloperSession { get; private set; }
@@ -21,11 +24,25 @@ public partial class LoginWindow : Window
 
         _auth = new AuthClient();
         InitializeComponent();
-        BrandMarkHost.Content = BrandPresentation.CreateMark(138);
+        BrandMarkHost.Content = BrandPresentation.CreateMark(178);
+        CardMarkHost.Content = BrandPresentation.CreateMark(28, glow: false);
         BackendModeText.Text = _auth.UsesCentralBackend
             ? "Connected to the GuildSync central service."
             : "Connected to the local GuildSync service.";
         LocalizationService.Apply(this);
+    }
+
+    private void Window_Loaded(object sender, RoutedEventArgs e)
+    {
+        if (_introPlayed) return;
+        _introPlayed = true;
+
+        if (FindResource("LoginIntroStoryboard") is Storyboard intro)
+            intro.Begin(this, HandoffBehavior.SnapshotAndReplace, true);
+
+        Dispatcher.BeginInvoke(
+            DispatcherPriority.Input,
+            new Action(() => EmailBox.Focus()));
     }
 
     private async void LoginButton_Click(object sender, RoutedEventArgs e)

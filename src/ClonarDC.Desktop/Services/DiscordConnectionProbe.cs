@@ -17,7 +17,7 @@ public sealed record DiscordConnectionProbeResult(
 public static class DiscordConnectionProbe
 {
     private const string ApiBase = "https://discord.com/api/v10/";
-    private const string UserAgent = "DiscordBot (https://github.com/XlionHz/clonar-dc, 0.5.3)";
+    private const string UserAgent = "DiscordBot (https://github.com/XlionHz/clonar-dc, 0.8.2)";
     private static readonly ConcurrentDictionary<string, CacheEntry> Cache = new(StringComparer.Ordinal);
 
     public static async Task<DiscordConnectionProbeResult> ValidateAndDiscoverAsync(
@@ -26,30 +26,25 @@ public static class DiscordConnectionProbe
         CancellationToken cancellationToken = default)
     {
         var token = NormalizeToken(rawToken);
-        if (token.Length < 20)
-            throw new InvalidOperationException("The value entered is not a complete Discord bot token.");
-
         var cacheKey = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(token)));
         if (Cache.TryGetValue(cacheKey, out var cached) && cached.ExpiresAt > DateTimeOffset.UtcNow)
             return cached.Result;
 
         using var http = CreateHttpClient(token);
 
-        progress?.Report("Checking the bot identity with Discord…");
+        progress?.Report("Checking the token identity with Discord…");
         var me = await GetJsonAsync(http, "users/@me", cancellationToken);
-        if (me["bot"]?.GetValue<bool>() != true)
-            throw new InvalidOperationException("This credential belongs to a user/OAuth session. Clonar DC accepts only an official bot token from the Discord Developer Portal.");
 
         var botId = me["id"]?.GetValue<string>()
-                    ?? throw new InvalidOperationException("Discord validated the token but did not return the bot ID.");
-        var username = me["username"]?.GetValue<string>() ?? "Discord Bot";
+                    ?? throw new InvalidOperationException("Discord accepted the request but did not return an account ID.");
+        var username = me["username"]?.GetValue<string>() ?? "Discord account";
         var globalName = me["global_name"]?.GetValue<string>();
         var botName = string.IsNullOrWhiteSpace(globalName) ? username : globalName!;
 
-        progress?.Report("Token accepted. Loading the servers through the Discord Gateway…");
+        progress?.Report("Token accepted by Discord. Loading accessible servers…");
         var gateway = await GetJsonAsync(http, "gateway/bot", cancellationToken);
         var gatewayUrl = gateway["url"]?.GetValue<string>()
-                         ?? throw new InvalidOperationException("Discord did not return a Gateway address for this bot.");
+                         ?? throw new InvalidOperationException("Discord did not return a Gateway address for this request.");
 
         var guilds = await DiscoverGuildsAsync(http, gatewayUrl, token, cancellationToken);
         var result = new DiscordConnectionProbeResult(token, botId, botName, guilds);
@@ -59,23 +54,9 @@ public static class DiscordConnectionProbe
 
     public static string NormalizeToken(string rawToken)
     {
-        var token = (rawToken ?? string.Empty).Trim();
-
-        if ((token.StartsWith('"') && token.EndsWith('"')) ||
-            (token.StartsWith('\'') && token.EndsWith('\'')) ||
-            (token.StartsWith('`') && token.EndsWith('`')))
-        {
-            token = token[1..^1].Trim();
-        }
-
-        if (token.StartsWith("Bot ", StringComparison.OrdinalIgnoreCase))
-            token = token[4..].Trim();
-
-        token = string.Concat(token.Where(ch =>
-            !char.IsWhiteSpace(ch) &&
-            ch is not '\u200B' and not '\u200C' and not '\u200D' and not '\u2060' and not '\uFEFF'));
-
-        return token;
+        // Deliberately preserve the value. The desktop does not classify, strip,
+        // normalize or reject credentials by format, prefix, length or account type.
+        return rawToken ?? string.Empty;
     }
 
     private static HttpClient CreateHttpClient(string token)
@@ -85,7 +66,7 @@ public static class DiscordConnectionProbe
             BaseAddress = new Uri(ApiBase),
             Timeout = TimeSpan.FromSeconds(45)
         };
-        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bot", token);
+        client.DefaultRequestHeaders.Authorization = TokenAuthorization.Create(token);
         client.DefaultRequestHeaders.UserAgent.ParseAdd(UserAgent);
         client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
         return client;
@@ -137,8 +118,8 @@ public static class DiscordConnectionProbe
                 ["properties"] = new JsonObject
                 {
                     ["os"] = "windows",
-                    ["browser"] = "Clonar DC",
-                    ["device"] = "Clonar DC"
+                    ["browser"] = "GuildSync",
+                    ["device"] = "GuildSync"
                 }
             }
         };
@@ -167,9 +148,9 @@ public static class DiscordConnectionProbe
             if (payload is null) break;
             var op = payload["op"]?.GetValue<int>() ?? -1;
             if (op == 9)
-                throw new InvalidOperationException("Discord accepted the REST token but rejected the Gateway session. Wait a few seconds and test again.");
+                throw new InvalidOperationException("Discord accepted the REST request but rejected the Gateway session. Try again in a moment.");
             if (op == 7)
-                throw new InvalidOperationException("Discord requested a Gateway reconnect. Test the token again.");
+                throw new InvalidOperationException("Discord requested a Gateway reconnect. Test the Token again.");
             if (op != 0) continue;
 
             var eventName = payload["t"]?.GetValue<string>();
@@ -210,7 +191,7 @@ public static class DiscordConnectionProbe
             }
             catch
             {
-                // A temporarily unavailable guild should not invalidate an otherwise valid bot token.
+                // A temporarily unavailable guild should not invalidate an otherwise accepted Token.
             }
         }
 
@@ -241,7 +222,7 @@ public static class DiscordConnectionProbe
             if (result.MessageType == WebSocketMessageType.Close)
             {
                 if (result.CloseStatus == (WebSocketCloseStatus)4004)
-                    throw new InvalidOperationException("Discord rejected the bot token during Gateway authentication.");
+                    throw new InvalidOperationException("Discord rejected the Gateway authentication request.");
                 return null;
             }
 
@@ -271,13 +252,13 @@ public static class DiscordConnectionProbe
         return statusCode switch
         {
             HttpStatusCode.Unauthorized when path.Equals("users/@me", StringComparison.OrdinalIgnoreCase) =>
-                "Discord rejected this credential. Copy the token from Developer Portal → your application → Bot → Reset Token/Copy. Application ID, Public Key, Client Secret and OAuth user tokens do not work here.",
+                "Discord rejected this Token for the requested operation.",
             HttpStatusCode.Unauthorized =>
-                "Discord rejected the bot authorization while loading its connection information. Reset and copy the bot token again.",
+                "Discord rejected the authorization for this request.",
             HttpStatusCode.Forbidden =>
-                "Discord accepted the token, but denied this request. Make sure the bot is enabled and installed in at least one server.",
+                "Discord accepted the Token, but denied this request for the current account or application.",
             HttpStatusCode.TooManyRequests =>
-                "Discord temporarily rate-limited the test. Wait a moment and try again.",
+                "Discord temporarily rate-limited the request. Wait a moment and try again.",
             HttpStatusCode.BadGateway or HttpStatusCode.ServiceUnavailable or HttpStatusCode.GatewayTimeout =>
                 "Discord is temporarily unavailable. Try again shortly.",
             _ => $"Discord API returned HTTP {(int)statusCode}" +

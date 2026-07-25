@@ -2,7 +2,7 @@
 
 GuildSync is a Windows desktop application for backing up, cloning and synchronizing Discord server structures through the official Discord Bot API.
 
-> Current development release: **0.8.1 alpha**
+> Current development release: **0.8.2 alpha**
 
 ## What it does
 

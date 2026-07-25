@@ -28,7 +28,7 @@ public partial class MainWindow : Window
         LocalizationService.Apply(this);
         UserNameText.Text = session.DisplayName;
         UserEmailText.Text = session.Email;
-        VersionText.Text = "v0.5.0 alpha";
+        VersionText.Text = "v0.8.2 alpha";
         AdminNav.Visibility = session.IsAdmin ? Visibility.Visible : Visibility.Collapsed;
         LogList.ItemsSource = _logs;
         OperationsList.ItemsSource = _operations;
@@ -77,7 +77,7 @@ public partial class MainWindow : Window
         catch (Exception ex)
         {
             AddLog("error", ex.Message);
-            MessageBox.Show(ex.Message, "Clonar DC", MessageBoxButton.OK, MessageBoxImage.Warning);
+            MessageBox.Show(ex.Message, "GuildSync", MessageBoxButton.OK, MessageBoxImage.Warning);
         }
     }
 
@@ -142,7 +142,7 @@ public partial class MainWindow : Window
             await _discord.ExecuteCloneAsync(_currentSourceSnapshot, target.Id, _currentPlan.Mode, MakeProgress());
             AddOperation($"Cloning completed: {_currentSourceSnapshot.Name} → {target.Name}");
             DashboardLastOperation.Text = $"Cloning → {target.Name}";
-            MessageBox.Show("Operation completed. Run another analysis to validate the result.", "Clonar DC", MessageBoxButton.OK, MessageBoxImage.Information);
+            MessageBox.Show("Operation completed. Run another analysis to validate the result.", "GuildSync", MessageBoxButton.OK, MessageBoxImage.Information);
         }
         catch (OperationCanceledException)
         {
@@ -188,7 +188,7 @@ public partial class MainWindow : Window
         try
         {
             var env = await _backups.LoadAsync(_backupPaths[BackupList.SelectedIndex]);
-            MessageBox.Show($"Backup '{env.Name}' is valid.", "Clonar DC", MessageBoxButton.OK, MessageBoxImage.Information);
+            MessageBox.Show($"Backup '{env.Name}' is valid.", "GuildSync", MessageBoxButton.OK, MessageBoxImage.Information);
         }
         catch (Exception ex)
         {

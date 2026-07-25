@@ -6,7 +6,7 @@ using System.Text;
 using System.Text.Json;
 
 const string ProductName = "GuildSync API";
-const string DefaultVersion = "0.8.1";
+const string DefaultVersion = "0.8.2";
 
 var builder = WebApplication.CreateBuilder(args);
 var environmentName = Environment.GetEnvironmentVariable("GUILDSYNC_ENV")

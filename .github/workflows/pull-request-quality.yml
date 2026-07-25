@@ -21,10 +21,17 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup .NET 10
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: '10.0.x'
+      - name: Verify preinstalled .NET 10
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          dotnet --info
+          $major = [int]((dotnet --version).Split('.')[0])
+          if ($major -lt 10) { throw 'The runner does not provide .NET 10 or newer.' }
+
+      - name: Prepare diagnostics
+        shell: pwsh
+        run: New-Item -ItemType Directory -Force -Path out/diagnostics,out/desktop-test | Out-Null
 
       - name: Verify source contracts and secrets
         shell: pwsh
@@ -34,21 +41,52 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          dotnet restore ./src/ClonarDC.Desktop/ClonarDC.Desktop.csproj
-          dotnet restore ./src/ClonarDC.Server/ClonarDC.Server.csproj
-          dotnet restore ./src/GuildSync.Bot/GuildSync.Bot.csproj
+          dotnet restore ./src/ClonarDC.Desktop/ClonarDC.Desktop.csproj *>&1 | Tee-Object out/diagnostics/restore-desktop.log
+          dotnet restore ./src/ClonarDC.Server/ClonarDC.Server.csproj *>&1 | Tee-Object out/diagnostics/restore-api.log
+          dotnet restore ./src/GuildSync.Bot/GuildSync.Bot.csproj *>&1 | Tee-Object out/diagnostics/restore-bot.log
 
       - name: Build projects
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          dotnet build ./src/ClonarDC.Desktop/ClonarDC.Desktop.csproj -c Release --no-restore
-          dotnet build ./src/ClonarDC.Server/ClonarDC.Server.csproj -c Release --no-restore
-          dotnet build ./src/GuildSync.Bot/GuildSync.Bot.csproj -c Release --no-restore
+          try {
+            dotnet build ./src/ClonarDC.Desktop/ClonarDC.Desktop.csproj -c Release --no-restore *>&1 | Tee-Object out/diagnostics/build-desktop.log
+            if ($LASTEXITCODE -ne 0) { throw 'Desktop build failed.' }
+
+            dotnet build ./src/ClonarDC.Server/ClonarDC.Server.csproj -c Release --no-restore *>&1 | Tee-Object out/diagnostics/build-api.log
+            if ($LASTEXITCODE -ne 0) { throw 'API build failed.' }
+
+            dotnet build ./src/GuildSync.Bot/GuildSync.Bot.csproj -c Release --no-restore *>&1 | Tee-Object out/diagnostics/build-bot.log
+            if ($LASTEXITCODE -ne 0) { throw 'Bot build failed.' }
+
+            dotnet publish ./src/ClonarDC.Desktop/ClonarDC.Desktop.csproj -c Release --no-restore --self-contained false -p:DebugType=None -p:DebugSymbols=false -o out/desktop-test *>&1 | Tee-Object out/diagnostics/publish-desktop-test.log
+            if ($LASTEXITCODE -ne 0) { throw 'Desktop test publish failed.' }
+
+            $assembly = Get-ChildItem out/desktop-test -Filter 'ClonarDC.dll' -File | Select-Object -First 1
+            if ($null -eq $assembly) {
+              Get-ChildItem out/desktop-test | Format-Table Name,Length | Out-String | Tee-Object out/diagnostics/desktop-test-files.log
+              throw 'Deterministic desktop assembly was not generated.'
+            }
+            $assembly.FullName | Set-Content out/desktop-assembly-path.txt
+          }
+          catch {
+            $_ | Format-List * -Force | Out-String | Tee-Object out/diagnostics/build-exception.log
+            throw
+          }
 
       - name: Test engine reliability contracts
         shell: pwsh
-        run: ./scripts/Test-EngineReliability.ps1
+        run: |
+          $ErrorActionPreference = 'Stop'
+          try {
+            $desktopAssembly = (Get-Content out/desktop-assembly-path.txt -Raw).Trim()
+            ./scripts/Test-EngineReliability.ps1 -DesktopAssembly $desktopAssembly *>&1 |
+              Tee-Object -FilePath out/diagnostics/engine-reliability.log
+          }
+          catch {
+            $_ | Format-List * -Force | Out-String | Tee-Object -FilePath out/diagnostics/engine-reliability.log -Append
+            throw
+          }
 
       - name: Publish API for smoke tests
         shell: pwsh
@@ -61,9 +99,8 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          New-Item -ItemType Directory -Force -Path out/diagnostics | Out-Null
           try {
-            ./scripts/Test-GuildSyncApi.ps1 -BackendPath "$PWD/out/backend/ClonarDC.Server.dll" -ExpectedVersion '0.8.1' *>&1 |
+            ./scripts/Test-GuildSyncApi.ps1 -BackendPath "$PWD/out/backend/ClonarDC.Server.dll" -ExpectedVersion '0.8.2' *>&1 |
               Tee-Object -FilePath out/diagnostics/api-smoke.log
           }
           catch {
@@ -76,7 +113,7 @@ jobs:
         run: |
           $ErrorActionPreference = 'Stop'
           try {
-            ./scripts/Test-AdminReconciliation.ps1 -BackendPath "$PWD/out/backend/ClonarDC.Server.dll" -ExpectedVersion '0.8.1' *>&1 |
+            ./scripts/Test-AdminReconciliation.ps1 -BackendPath "$PWD/out/backend/ClonarDC.Server.dll" -ExpectedVersion '0.8.2' *>&1 |
               Tee-Object -FilePath out/diagnostics/admin-reconciliation.log
           }
           catch {
@@ -90,8 +127,8 @@ jobs:
         with:
           name: guildsync-pr-diagnostics
           path: |
-            src/**/bin/**/*.deps.json
-            src/**/bin/**/*.runtimeconfig.json
+            out/desktop-test/*.deps.json
+            out/desktop-test/*.runtimeconfig.json
             out/backend/*.deps.json
             out/backend/*.runtimeconfig.json
             out/diagnostics/**

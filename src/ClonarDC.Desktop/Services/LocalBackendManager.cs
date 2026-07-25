@@ -40,11 +40,11 @@ internal static class LocalBackendManager
 
             var backendExe = Path.Combine(AppContext.BaseDirectory, "backend", "ClonarDC.Server.exe");
             if (!File.Exists(backendExe))
-                throw new InvalidOperationException("O serviço de contas não foi encontrado na instalação. Reinstale o Clonar DC.");
+                throw new InvalidOperationException("O serviço de contas não foi encontrado na instalação. Reinstale o GuildSync.");
 
             var dataDirectory = Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                "Clonar DC",
+                "GuildSync",
                 "backend-data");
             Directory.CreateDirectory(dataDirectory);
 

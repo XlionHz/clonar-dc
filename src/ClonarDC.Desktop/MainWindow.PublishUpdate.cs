@@ -8,7 +8,7 @@ public partial class MainWindow
     {
         if (!_session.IsAdmin)
         {
-            MessageBox.Show("Administrator access is required.", "Clonar DC", MessageBoxButton.OK, MessageBoxImage.Warning);
+            MessageBox.Show("Administrator access is required.", "GuildSync", MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
 

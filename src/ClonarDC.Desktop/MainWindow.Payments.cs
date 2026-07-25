@@ -44,7 +44,7 @@ public partial class MainWindow
     {
         if (PaymentPlanBox.SelectedItem is not PaymentPlanDto plan)
         {
-            MessageBox.Show("Select a license plan.", "Clonar DC", MessageBoxButton.OK, MessageBoxImage.Information);
+            MessageBox.Show("Select a license plan.", "GuildSync", MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
 

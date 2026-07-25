@@ -33,20 +33,9 @@ public partial class MainWindow
             """);
         Pages.SelectedIndex = 0;
 
-        if (Content is Grid root &&
-            root.Children.OfType<Border>().FirstOrDefault(item => Grid.GetColumn(item) == 0) is Border sidebar &&
-            sidebar.Child is Grid sidebarGrid)
-        {
-            var currentHeader = sidebarGrid.Children
-                .OfType<UIElement>()
-                .FirstOrDefault(item => Grid.GetRow(item) == 0);
-            if (currentHeader is not null) sidebarGrid.Children.Remove(currentHeader);
-
-            var brandedHeader = BrandPresentation.CreateSidebarHeader();
-            Grid.SetRow(brandedHeader, 0);
-            sidebarGrid.Children.Add(brandedHeader);
-        }
-
+        SidebarBrandHost.Content = BrandPresentation.CreateSidebarHeader();
+        InitializeEditableServerInputs();
+        InitializeCompatibilityUi();
         InitializeUpdateUi();
         LocalizationService.Apply(this);
     }
