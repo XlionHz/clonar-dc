@@ -19,7 +19,7 @@ public partial class MainWindow
 
         var settingsTab = Pages.Items.OfType<TabItem>()
             .FirstOrDefault(item => string.Equals(item.Header?.ToString(), "Settings", StringComparison.Ordinal));
-        if (settingsTab?.Content is not StackPanel settingsPanel) return;
+        if (settingsTab?.Content is not ScrollViewer scrollViewer || scrollViewer.Content is not StackPanel settingsPanel) return;
 
         var card = new Border
         {
@@ -66,7 +66,7 @@ public partial class MainWindow
         content.Children.Add(_updateStatusText);
         card.Child = content;
 
-        settingsPanel.Children.Insert(Math.Min(2, settingsPanel.Children.Count), card);
+        settingsPanel.Children.Add(card);
         _ = StartAutomaticUpdateCheckAsync();
     }
 
@@ -89,7 +89,7 @@ public partial class MainWindow
 
         _updateCts = new CancellationTokenSource();
         _checkUpdatesButton.IsEnabled = false;
-        _updateStatusText.Text = "Checking for updates…";
+        _updateStatusText.Text = "Checking for GuildSync updates…";
 
         try
         {
@@ -98,14 +98,14 @@ public partial class MainWindow
             {
                 _updateStatusText.Text = $"Current version: {_updateService.CurrentVersion}. No updates are available.";
                 if (showCurrentMessage)
-                    MessageBox.Show("You are already using the latest version.", "Clonar DC", MessageBoxButton.OK, MessageBoxImage.Information);
+                    MessageBox.Show("You are already using the latest GuildSync version.", "GuildSync", MessageBoxButton.OK, MessageBoxImage.Information);
                 return;
             }
 
-            _updateStatusText.Text = $"New version available: {update.Tag}.";
+            _updateStatusText.Text = $"New GuildSync version available: {update.Tag}.";
             var answer = MessageBox.Show(
-                $"Version {update.Tag} is available.\n\nClonar DC can download, verify, and install it automatically. The app will close during installation.\n\nUpdate now?",
-                "Update available",
+                $"Version {update.Tag} is available.\n\nGuildSync can download, verify, and install it automatically. The app will close during installation.\n\nUpdate now?",
+                "GuildSync update available",
                 MessageBoxButton.YesNo,
                 MessageBoxImage.Information);
 
@@ -113,21 +113,21 @@ public partial class MainWindow
 
             var progress = new Progress<int>(percent =>
             {
-                _updateStatusText.Text = $"Downloading update… {percent}%";
+                _updateStatusText.Text = $"Downloading GuildSync update… {percent}%";
             });
 
             var setupPath = await _updateService.DownloadAndVerifyAsync(update, progress, _updateCts.Token);
-            _updateStatusText.Text = "Download complete and integrity verified. Installing…";
+            _updateStatusText.Text = "Download complete and integrity verified. Installing GuildSync…";
             UpdateService.LaunchInstaller(setupPath);
             Application.Current.Shutdown();
         }
         catch (OperationCanceledException)
         {
-            _updateStatusText.Text = "Update check canceled.";
+            _updateStatusText.Text = "GuildSync update check canceled.";
         }
         catch (Exception ex)
         {
-            _updateStatusText.Text = "Unable to update: " + ex.Message;
+            _updateStatusText.Text = "Unable to update GuildSync: " + ex.Message;
             if (showCurrentMessage)
                 MessageBox.Show(_updateStatusText.Text, LocalizationService.T("Updates"), MessageBoxButton.OK, MessageBoxImage.Warning);
         }
