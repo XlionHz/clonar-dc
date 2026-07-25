@@ -26,6 +26,10 @@ jobs:
         with:
           dotnet-version: '10.0.x'
 
+      - name: Prepare diagnostics
+        shell: pwsh
+        run: New-Item -ItemType Directory -Force -Path out/diagnostics | Out-Null
+
       - name: Verify source contracts and secrets
         shell: pwsh
         run: ./scripts/Test-SourceContracts.ps1
@@ -48,7 +52,15 @@ jobs:
 
       - name: Test engine reliability contracts
         shell: pwsh
-        run: ./scripts/Test-EngineReliability.ps1
+        run: |
+          $ErrorActionPreference = 'Stop'
+          try {
+            ./scripts/Test-EngineReliability.ps1 *>&1 | Tee-Object -FilePath out/diagnostics/engine-reliability.log
+          }
+          catch {
+            $_ | Format-List * -Force | Out-String | Tee-Object -FilePath out/diagnostics/engine-reliability.log -Append
+            throw
+          }
 
       - name: Publish API for smoke tests
         shell: pwsh
@@ -61,7 +73,6 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          New-Item -ItemType Directory -Force -Path out/diagnostics | Out-Null
           try {
             ./scripts/Test-GuildSyncApi.ps1 -BackendPath "$PWD/out/backend/ClonarDC.Server.dll" -ExpectedVersion '0.8.1' *>&1 |
               Tee-Object -FilePath out/diagnostics/api-smoke.log
