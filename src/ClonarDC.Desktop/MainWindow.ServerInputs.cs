@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using ClonarDC.Services;
 
 namespace ClonarDC;
@@ -12,16 +13,28 @@ public partial class MainWindow
 
         SourceGuildBox.LostKeyboardFocus -= EditableServerBox_LostKeyboardFocus;
         TargetGuildBox.LostKeyboardFocus -= EditableServerBox_LostKeyboardFocus;
+        SourceGuildBox.PreviewKeyDown -= EditableServerBox_PreviewKeyDown;
+        TargetGuildBox.PreviewKeyDown -= EditableServerBox_PreviewKeyDown;
+
         SourceGuildBox.LostKeyboardFocus += EditableServerBox_LostKeyboardFocus;
         TargetGuildBox.LostKeyboardFocus += EditableServerBox_LostKeyboardFocus;
+        SourceGuildBox.PreviewKeyDown += EditableServerBox_PreviewKeyDown;
+        TargetGuildBox.PreviewKeyDown += EditableServerBox_PreviewKeyDown;
 
         SidebarBrandHost.Content ??= BrandPresentation.CreateSidebarHeader();
         Pages.SelectedIndex = Pages.SelectedIndex < 0 ? 0 : Pages.SelectedIndex;
     }
 
-    private void EditableServerBox_LostKeyboardFocus(object sender, System.Windows.Input.KeyboardFocusChangedEventArgs e)
+    private void EditableServerBox_LostKeyboardFocus(object sender, KeyboardFocusChangedEventArgs e)
     {
         if (sender is ComboBox box)
+            MaterializeTypedServer(box);
+    }
+
+    private void EditableServerBox_PreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        if (sender is not ComboBox box) return;
+        if (e.Key is Key.Enter or Key.Tab)
             MaterializeTypedServer(box);
     }
 
