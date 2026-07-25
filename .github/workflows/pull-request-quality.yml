@@ -31,7 +31,7 @@ jobs:
 
       - name: Prepare diagnostics
         shell: pwsh
-        run: New-Item -ItemType Directory -Force -Path out/diagnostics | Out-Null
+        run: New-Item -ItemType Directory -Force -Path out/diagnostics,out/desktop-build | Out-Null
 
       - name: Verify source contracts and secrets
         shell: pwsh
@@ -49,16 +49,18 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          dotnet build ./src/ClonarDC.Desktop/ClonarDC.Desktop.csproj -c Release --no-restore
+          dotnet build ./src/ClonarDC.Desktop/ClonarDC.Desktop.csproj -c Release --no-restore -o out/desktop-build
           dotnet build ./src/ClonarDC.Server/ClonarDC.Server.csproj -c Release --no-restore
           dotnet build ./src/GuildSync.Bot/GuildSync.Bot.csproj -c Release --no-restore
+          if (-not (Test-Path out/desktop-build/ClonarDC.dll)) { throw 'Deterministic desktop assembly was not generated.' }
 
       - name: Test engine reliability contracts
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
           try {
-            ./scripts/Test-EngineReliability.ps1 *>&1 | Tee-Object -FilePath out/diagnostics/engine-reliability.log
+            ./scripts/Test-EngineReliability.ps1 -DesktopAssembly "$PWD/out/desktop-build/ClonarDC.dll" *>&1 |
+              Tee-Object -FilePath out/diagnostics/engine-reliability.log
           }
           catch {
             $_ | Format-List * -Force | Out-String | Tee-Object -FilePath out/diagnostics/engine-reliability.log -Append
@@ -104,8 +106,8 @@ jobs:
         with:
           name: guildsync-pr-diagnostics
           path: |
-            src/**/bin/**/*.deps.json
-            src/**/bin/**/*.runtimeconfig.json
+            out/desktop-build/*.deps.json
+            out/desktop-build/*.runtimeconfig.json
             out/backend/*.deps.json
             out/backend/*.runtimeconfig.json
             out/diagnostics/**
