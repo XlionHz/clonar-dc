@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: guildsync-pr-${{ github.event.pull_request.number || github.ref }}
@@ -20,27 +20,6 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          ref: ${{ github.head_ref || github.ref_name }}
-          fetch-depth: 0
-
-      - name: Apply GuildSync 0.8 server integration
-        shell: pwsh
-        run: ./scripts/Apply-08-ServerPatch.ps1
-
-      - name: Persist generated server integration
-        shell: pwsh
-        run: |
-          $ErrorActionPreference = 'Stop'
-          if (-not (git status --porcelain -- src/ClonarDC.Server/Program.cs)) {
-            Write-Host 'Program.cs is already integrated.'
-            exit 0
-          }
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add src/ClonarDC.Server/Program.cs
-          git commit -m 'server: integrate device enforcement [skip ci]'
-          git push origin HEAD:${{ github.head_ref || github.ref_name }}
 
       - name: Setup .NET 10
         uses: actions/setup-dotnet@v4
@@ -75,12 +54,12 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          dotnet publish ./src/ClonarDC.Server/ClonarDC.Server.csproj -c Release -r win-x64 --self-contained true -p:DebugType=None -p:DebugSymbols=false -o out/backend
-          if (-not (Test-Path out/backend/ClonarDC.Server.exe)) { throw 'GuildSync API executable was not generated.' }
+          dotnet publish ./src/ClonarDC.Server/ClonarDC.Server.csproj -c Release --no-restore -p:DebugType=None -p:DebugSymbols=false -o out/backend
+          if (-not (Test-Path out/backend/ClonarDC.Server.dll)) { throw 'GuildSync API assembly was not generated.' }
 
       - name: Run API behavior smoke test
         shell: pwsh
-        run: ./scripts/Test-GuildSyncApi.ps1 -BackendPath "$PWD/out/backend/ClonarDC.Server.exe" -ExpectedVersion '0.8.0'
+        run: ./scripts/Test-GuildSyncApi.ps1 -BackendPath "$PWD/out/backend/ClonarDC.Server.dll" -ExpectedVersion '0.8.0'
 
       - name: Upload diagnostics
         if: always()
@@ -90,5 +69,7 @@ jobs:
           path: |
             src/**/bin/**/*.deps.json
             src/**/bin/**/*.runtimeconfig.json
+            out/backend/*.deps.json
+            out/backend/*.runtimeconfig.json
           if-no-files-found: ignore
           retention-days: 7
