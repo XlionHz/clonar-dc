@@ -1,13 +1,15 @@
 #define MyAppName "GuildSync"
-#define MyAppVersion "0.7.0"
+#define MyAppVersion "0.7.1"
 #define MyAppPublisher "GuildSync"
 #define MyAppExeName "ClonarDC.exe"
 
 [Setup]
 AppId={{D9D864B5-6B0B-44F9-9C61-6E3D12DF8A17}
 AppName={#MyAppName}
+AppVerName={#MyAppName} {#MyAppVersion}
 AppVersion={#MyAppVersion}
 AppPublisher={#MyAppPublisher}
+VersionInfoVersion=0.7.1.0
 DefaultDirName={localappdata}\Programs\GuildSync
 DefaultGroupName=GuildSync
 DisableProgramGroupPage=yes
@@ -24,6 +26,8 @@ ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 CloseApplications=yes
 RestartApplications=yes
+SetupLogging=yes
+UsePreviousAppDir=yes
 ShowLanguageDialog=yes
 LanguageDetectionMethod=none
 UsePreviousLanguage=yes
