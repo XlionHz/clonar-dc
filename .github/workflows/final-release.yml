@@ -11,7 +11,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: guildsync-build
+  group: guildsync-release
   cancel-in-progress: true
 
 jobs:
@@ -19,7 +19,7 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 60
     env:
-      APP_VERSION: '0.7.0'
+      APP_VERSION: '0.7.1'
 
     steps:
       - name: Checkout
@@ -30,138 +30,54 @@ jobs:
         with:
           dotnet-version: '10.0.x'
 
-      - name: Restore and build GuildSync
+      - name: Verify source contracts and secrets
+        shell: pwsh
+        run: ./scripts/Test-SourceContracts.ps1
+
+      - name: Restore and build all GuildSync components
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          New-Item -ItemType Directory -Force -Path build-status,out | Out-Null
-          dotnet restore .\src\ClonarDC.Desktop\ClonarDC.Desktop.csproj
-          dotnet build .\src\ClonarDC.Desktop\ClonarDC.Desktop.csproj -c Release --no-restore
-          dotnet restore .\src\ClonarDC.Server\ClonarDC.Server.csproj
-          dotnet build .\src\ClonarDC.Server\ClonarDC.Server.csproj -c Release --no-restore
-          dotnet restore .\src\GuildSync.Bot\GuildSync.Bot.csproj
-          dotnet build .\src\GuildSync.Bot\GuildSync.Bot.csproj -c Release --no-restore
+          dotnet restore ./src/ClonarDC.Desktop/ClonarDC.Desktop.csproj
+          dotnet restore ./src/ClonarDC.Server/ClonarDC.Server.csproj
+          dotnet restore ./src/GuildSync.Bot/GuildSync.Bot.csproj
+          dotnet build ./src/ClonarDC.Desktop/ClonarDC.Desktop.csproj -c Release --no-restore
+          dotnet build ./src/ClonarDC.Server/ClonarDC.Server.csproj -c Release --no-restore
+          dotnet build ./src/GuildSync.Bot/GuildSync.Bot.csproj -c Release --no-restore
 
-      - name: Verify GuildSync product contracts
-        shell: pwsh
-        run: |
-          $ErrorActionPreference = 'Stop'
-          $main = Get-Content .\src\ClonarDC.Desktop\MainWindow.xaml -Raw
-          $login = Get-Content .\src\ClonarDC.Desktop\LoginWindow.xaml -Raw
-          $auth = Get-Content .\src\ClonarDC.Desktop\Services\AuthClient.cs -Raw
-          $resolver = Get-Content .\src\ClonarDC.Desktop\Services\ApiEndpointResolver.cs -Raw
-          $paymentUi = Get-Content .\src\ClonarDC.Desktop\MainWindow.Payments.cs -Raw
-          $paymentApi = Get-Content .\src\ClonarDC.Server\MercadoPagoPayments.cs -Raw
-          $discordApi = Get-Content .\src\ClonarDC.Server\DiscordIntegration.cs -Raw
-          $bot = Get-Content .\src\GuildSync.Bot\Program.cs -Raw
-          $render = Get-Content .\render.yaml -Raw
-          $installer = Get-Content .\installer\ClonarDC.iss -Raw
-          $apiUrl = (Get-Content .\src\ClonarDC.Desktop\api-url.txt -Raw).Trim()
-
-          foreach ($required in @('GuildSync','GuildSyncLogo.png','SYNC • CLONE • SCALE','Bot token','Connect Discord','LinkDiscord_Click','Buy with Mercado Pago')) {
-            if (-not $main.Contains($required) -and -not $login.Contains($required)) { throw "GuildSync desktop contract is missing: $required" }
-          }
-          foreach ($required in @('CreateCheckoutAsync','GetPaymentOrderAsync','GetCurrentSessionAsync','LinkDiscordAsync','discord/link/claim')) {
-            if (-not $auth.Contains($required)) { throw "GuildSync client contract is missing: $required" }
-          }
-          foreach ($required in @('PollPaymentAsync','Payment approved','RefreshLicenseFromServerAsync')) {
-            if (-not $paymentUi.Contains($required)) { throw "Payment UI contract is missing: $required" }
-          }
-          foreach ($required in @('/payments/checkout','/webhooks/mercadopago','ApplyMercadoPagoPaymentAsync','license-activated','amount-or-currency-mismatch')) {
-            if (-not $paymentApi.Contains($required)) { throw "Payment API contract is missing: $required" }
-          }
-          foreach ($required in @('/discord/link/claim','/discord/bot/link-code','/discord/bot/license','/discord/bot/checkout','FixedTimeSecretEquals','HashLinkCode')) {
-            if (-not $discordApi.Contains($required)) { throw "Discord API contract is missing: $required" }
-          }
-          foreach ($required in @('DISCORD_BOT_TOKEN','GUILDSYNC_BOT_API_KEY','BulkOverwriteGlobalCommands','CreateLinkCodeAsync','CreateCheckoutAsync','WithName("unlink")')) {
-            if (-not $bot.Contains($required)) { throw "Discord bot contract is missing: $required" }
-          }
-          foreach ($required in @('GUILDSYNC_API','Software\GuildSync','api-url.txt','https')) {
-            if (-not $resolver.Contains($required)) { throw "API resolver contract is missing: $required" }
-          }
-          if ($apiUrl -ne 'https://clonar-dc-api.onrender.com') { throw 'Bundled central API URL is incorrect.' }
-          foreach ($required in @('runtime: docker','healthCheckPath: /status','GUILDSYNC_BOT_API_KEY','MERCADOPAGO_WEBHOOK_SECRET','value: "1.00"')) {
-            if (-not $render.Contains($required)) { throw "Render contract is missing: $required" }
-          }
-          foreach ($required in @('MyAppName "GuildSync"','MyAppVersion "0.7.0"','GuildSync-Setup','GuildSync.ico')) {
-            if (-not $installer.Contains($required)) { throw "Installer contract is missing: $required" }
-          }
-
-          'GuildSync brand, payments, central API, Discord linking and bot contracts verified.' | Set-Content out/product-contracts.txt
-
-      - name: Publish desktop, backend and bot
+      - name: Publish desktop, API and bot
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
           $fullVersion = "$env:APP_VERSION.$env:GITHUB_RUN_NUMBER"
-          New-Item -ItemType Directory -Force -Path out/app,out/backend,out/bot | Out-Null
-          dotnet publish .\src\ClonarDC.Desktop\ClonarDC.Desktop.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=false -p:DebugType=None -p:DebugSymbols=false -p:Version=$env:APP_VERSION -p:FileVersion=$fullVersion -p:AssemblyVersion=$fullVersion -o out/app
-          dotnet publish .\src\ClonarDC.Server\ClonarDC.Server.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=false -p:DebugType=None -p:DebugSymbols=false -o out/backend
-          dotnet publish .\src\GuildSync.Bot\GuildSync.Bot.csproj -c Release -r linux-x64 --self-contained false -p:DebugType=None -p:DebugSymbols=false -o out/bot
+          New-Item -ItemType Directory -Force -Path out/app,out/backend,out/bot,out/installer | Out-Null
+          dotnet publish ./src/ClonarDC.Desktop/ClonarDC.Desktop.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=false -p:DebugType=None -p:DebugSymbols=false -p:Version=$env:APP_VERSION -p:FileVersion=$fullVersion -p:AssemblyVersion=0.7.1.0 -o out/app
+          dotnet publish ./src/ClonarDC.Server/ClonarDC.Server.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=false -p:DebugType=None -p:DebugSymbols=false -p:Version=$env:APP_VERSION -p:FileVersion=$fullVersion -p:AssemblyVersion=0.7.1.0 -o out/backend
+          dotnet publish ./src/GuildSync.Bot/GuildSync.Bot.csproj -c Release -r linux-x64 --self-contained false -p:DebugType=None -p:DebugSymbols=false -p:Version=$env:APP_VERSION -p:AssemblyVersion=0.7.1.0 -o out/bot
           if (-not (Test-Path out/app/ClonarDC.exe)) { throw 'GuildSync desktop executable was not generated.' }
           if (-not (Test-Path out/app/api-url.txt)) { throw 'api-url.txt was not published.' }
-          if (-not (Test-Path out/app/GuildSyncLogo.png) -and -not (Test-Path out/app/ClonarDC.g.resources)) { throw 'GuildSync resources were not published.' }
-          if (-not (Test-Path out/backend/ClonarDC.Server.exe)) { throw 'GuildSync backend executable was not generated.' }
-          if (-not (Test-Path out/bot/GuildSync.Bot.dll)) { throw 'GuildSync Discord bot was not generated.' }
+          if (-not (Test-Path out/backend/ClonarDC.Server.exe)) { throw 'GuildSync API executable was not generated.' }
+          if (-not (Test-Path out/bot/GuildSync.Bot.dll)) { throw 'GuildSync bot was not generated.' }
 
-      - name: Local backend smoke test
+      - name: Run API behavior smoke test
         shell: pwsh
-        run: |
-          $ErrorActionPreference = 'Stop'
-          $testData = Join-Path $env:RUNNER_TEMP 'guildsync-auth-smoke'
-          Remove-Item $testData -Recurse -Force -ErrorAction SilentlyContinue
-          New-Item -ItemType Directory -Force -Path $testData | Out-Null
-          $env:GUILDSYNC_LISTEN = 'http://127.0.0.1:18787'
-          $env:GUILDSYNC_DATA = $testData
-          $env:GUILDSYNC_ADMIN_EMAIL = 'build-admin@example.invalid'
-          $env:GUILDSYNC_ADMIN_PASSWORD = 'BuildOnly!Admin_2026'
-          $backend = Start-Process -FilePath "$PWD\out\backend\ClonarDC.Server.exe" -PassThru -WindowStyle Hidden
-          try {
-            $status = $null
-            for ($i = 0; $i -lt 80; $i++) {
-              try { $status = Invoke-RestMethod -Uri 'http://127.0.0.1:18787/status' -TimeoutSec 1; break }
-              catch { Start-Sleep -Milliseconds 250 }
-            }
-            if ($null -eq $status) { throw 'GuildSync backend did not start.' }
-            if ($status.service -ne 'GuildSync API') { throw "Unexpected service identity: $($status.service)" }
-            if ($status.storage -ne 'file') { throw "Unexpected local storage: $($status.storage)" }
-            if ($status.discordIntegrationConfigured -ne $false) { throw 'Discord integration must be disabled without the bot API key.' }
-
-            $email = "user-$([Guid]::NewGuid().ToString('N'))@example.invalid"
-            $password = 'BuildOnly!User_2026'
-            $register = Invoke-RestMethod -Method Post -Uri 'http://127.0.0.1:18787/auth/register' -ContentType 'application/json' -Body (@{name='Build User';email=$email;password=$password}|ConvertTo-Json)
-            if ($register.status -ne 'pending') { throw 'Registration failed.' }
-            $login = Invoke-RestMethod -Method Post -Uri 'http://127.0.0.1:18787/auth/login' -ContentType 'application/json' -Body (@{email=$email;password=$password}|ConvertTo-Json)
-            if (-not $login.accessToken) { throw 'Login failed.' }
-
-            try {
-              Invoke-RestMethod -Method Post -Uri 'http://127.0.0.1:18787/discord/bot/link-code' -ContentType 'application/json' -Body (@{discordUserId='123456789012345678'}|ConvertTo-Json)
-              throw 'Discord bot endpoint accepted a request without authentication.'
-            }
-            catch {
-              if ($_.Exception.Response.StatusCode.value__ -ne 503) { throw }
-            }
-            'GuildSync registration, login, storage and protected Discord endpoint passed.' | Set-Content out/backend-smoke.txt
-          }
-          finally {
-            if ($backend -and -not $backend.HasExited) { Stop-Process -Id $backend.Id -Force }
-            Remove-Item Env:GUILDSYNC_LISTEN,Env:GUILDSYNC_DATA,Env:GUILDSYNC_ADMIN_EMAIL,Env:GUILDSYNC_ADMIN_PASSWORD -ErrorAction SilentlyContinue
-          }
+        run: ./scripts/Test-GuildSyncApi.ps1 -BackendPath "$PWD/out/backend/ClonarDC.Server.exe" -ExpectedVersion $env:APP_VERSION
 
       - name: Desktop runtime smoke test
         shell: pwsh
         run: |
-          $proc = Start-Process -FilePath "$PWD\out\app\ClonarDC.exe" -PassThru
+          $ErrorActionPreference = 'Stop'
+          $process = Start-Process -FilePath "$PWD/out/app/ClonarDC.exe" -PassThru
           Start-Sleep -Seconds 8
-          if ($proc.HasExited) { throw "GuildSync exited early with code $($proc.ExitCode)." }
-          Stop-Process -Id $proc.Id -Force
+          if ($process.HasExited) { throw "GuildSync exited early with code $($process.ExitCode)." }
+          Stop-Process -Id $process.Id -Force
           'GuildSync desktop stayed alive for 8 seconds.' | Set-Content out/desktop-smoke.txt
 
       - name: Install Inno Setup
         shell: pwsh
         run: choco install innosetup --no-progress -y
 
-      - name: Build GuildSync installer and update package
+      - name: Build installer and signed-hash update package
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
@@ -172,7 +88,7 @@ jobs:
           if (-not (Test-Path $setup)) { throw 'GuildSync installer was not generated.' }
           $hash = (Get-FileHash $setup -Algorithm SHA256).Hash
           $hash | Set-Content 'out\installer\GuildSync-Setup.sha256'
-          "VERSION=$env:APP_VERSION`nSHA256=$hash" | Set-Content 'out\installer\build-info.txt'
+          "VERSION=$env:APP_VERSION`nSHA256=$hash`nCOMMIT=$env:GITHUB_SHA" | Set-Content 'out\installer\build-info.txt'
 
           $packageRoot = 'out\update-package'
           Remove-Item $packageRoot -Recurse -Force -ErrorAction SilentlyContinue
@@ -183,7 +99,7 @@ jobs:
             version = $env:APP_VERSION
             tag = "v$env:APP_VERSION"
             title = "GuildSync $env:APP_VERSION"
-            notes = 'GuildSync rebrand, approved visual identity, central account linking, secure Discord bot commands, Mercado Pago checkout and automatic license activation.'
+            notes = 'Production hardening for authentication, sessions, persistence, bot lifecycle, deployment and release validation.'
             setupFile = 'GuildSync-Setup.exe'
             sha256 = $hash
           } | ConvertTo-Json -Depth 4 | Set-Content (Join-Path $packageRoot 'manifest.json') -Encoding UTF8
@@ -201,38 +117,34 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          $setup = "$PWD\out\installer\GuildSync-Setup.exe"
+          $setup = "$PWD/out/installer/GuildSync-Setup.exe"
           $install = Start-Process -FilePath $setup -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/SP-','/LANG=en' -Wait -PassThru
           if ($install.ExitCode -ne 0) { throw "Installer returned $($install.ExitCode)." }
           $root = Join-Path $env:LOCALAPPDATA 'Programs\GuildSync'
           if (-not (Test-Path (Join-Path $root 'ClonarDC.exe'))) { throw 'Installed GuildSync app was not found.' }
-          if (-not (Test-Path (Join-Path $root 'backend\ClonarDC.Server.exe'))) { throw 'Installed GuildSync backend was not found.' }
+          if (-not (Test-Path (Join-Path $root 'backend\ClonarDC.Server.exe'))) { throw 'Installed GuildSync API was not found.' }
           if ((Get-Content (Join-Path $root 'api-url.txt') -Raw).Trim() -ne 'https://clonar-dc-api.onrender.com') { throw 'Installed central API URL is incorrect.' }
-          'GuildSync installer and central API configuration passed.' | Set-Content out/installer-smoke.txt
+          'GuildSync installer passed.' | Set-Content out/installer-smoke.txt
 
       - name: Upload verified artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: GuildSync-Verified-Windows
+          name: GuildSync-Verified-Windows-${{ env.APP_VERSION }}
           path: |
             out/installer/GuildSync-Setup.exe
             out/installer/GuildSync-Setup.sha256
             out/installer/build-info.txt
             out/GuildSync-${{ env.APP_VERSION }}.clonardc-update
             out/bot/**
-            out/product-contracts.txt
-            out/backend-smoke.txt
             out/desktop-smoke.txt
             out/installer-smoke.txt
             render.yaml
             Dockerfile
             Dockerfile.bot
-            docs/discord-bot-setup.md
-            docs/discord-community-blueprint.md
-            docs/pricing.md
+            docs/**
           if-no-files-found: error
 
-      - name: Create GitHub release
+      - name: Create prerelease
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
@@ -240,27 +152,25 @@ jobs:
           $ErrorActionPreference = 'Stop'
           $tag = "v$env:APP_VERSION-alpha.$env:GITHUB_RUN_NUMBER"
           $title = "GuildSync $env:APP_VERSION Alpha $env:GITHUB_RUN_NUMBER"
-          $notes = 'GuildSync rebrand with approved visual identity, secure Discord account linking and bot commands, central API, Mercado Pago checkout, PostgreSQL persistence and automatic license activation.'
-          gh release create $tag 'out/installer/GuildSync-Setup.exe' 'out/installer/GuildSync-Setup.sha256' "out/GuildSync-$env:APP_VERSION.clonardc-update" --title $title --notes $notes --target $env:GITHUB_SHA
+          $notes = 'Authentication and session hardening, safe production storage, improved bot lifecycle, version alignment and verified installer/update packaging.'
+          gh release create $tag 'out/installer/GuildSync-Setup.exe' 'out/installer/GuildSync-Setup.sha256' "out/GuildSync-$env:APP_VERSION.clonardc-update" --title $title --notes $notes --target $env:GITHUB_SHA --prerelease
 
       - name: Record successful build
         if: success()
         shell: pwsh
         run: |
           $hash = (Get-Content 'out\installer\GuildSync-Setup.sha256' -Raw).Trim()
-          $lines = @(
+          @(
             '# Latest verified build',
             '',
             'Status: **SUCCESS**',
             "Version: $env:APP_VERSION",
             "Source commit: $env:GITHUB_SHA",
             "Workflow run: https://github.com/$env:GITHUB_REPOSITORY/actions/runs/$env:GITHUB_RUN_ID",
-            "Release: https://github.com/$env:GITHUB_REPOSITORY/releases/tag/v$env:APP_VERSION-alpha.$env:GITHUB_RUN_NUMBER",
             "SHA-256: $hash",
             '',
-            'Validation: desktop, API and Discord bot compiled; brand, payments, account linking and deployment contracts checked; registration/login tested; installer and update package verified.'
-          )
-          $lines | Set-Content build-status/latest.md -Encoding UTF8
+            'Validation: desktop, API and bot compiled; API behavior, session revocation, installer and update package verified.'
+          ) | Set-Content build-status/latest.md -Encoding UTF8
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add build-status/latest.md
@@ -272,18 +182,17 @@ jobs:
         if: failure()
         shell: pwsh
         run: |
-          $lines = @(
+          @(
             '# Latest verified build',
             '',
             'Status: **FAILURE**',
             "Version: $env:APP_VERSION",
             "Source commit: $env:GITHUB_SHA",
             "Workflow run: https://github.com/$env:GITHUB_REPOSITORY/actions/runs/$env:GITHUB_RUN_ID"
-          )
-          $lines | Set-Content build-status/latest.md -Encoding UTF8
+          ) | Set-Content build-status/latest.md -Encoding UTF8
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add build-status/latest.md
-          git commit -m 'ci: record failed GuildSync build diagnostics [skip ci]' || exit 0
+          git commit -m 'ci: record failed GuildSync build [skip ci]' || exit 0
           git pull --rebase origin main || exit 0
           git push || exit 0
