@@ -268,7 +268,7 @@ public sealed class BackupService
         public int FormatVersion { get; set; } = 2;
         public string Id { get; set; } = string.Empty;
         public DateTimeOffset CreatedAt { get; set; }
-        public string AppVersion { get; set; } = "0.8.0";
+        public string AppVersion { get; set; } = "0.8.1";
         public string Name { get; set; } = string.Empty;
         public string? Description { get; set; }
         public List<string>? Tags { get; set; }

@@ -168,7 +168,7 @@ public sealed class BackupEnvelope
     public int FormatVersion { get; set; } = 2;
     public string Id { get; set; } = Guid.NewGuid().ToString("N");
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
-    public string AppVersion { get; set; } = "0.8.0";
+    public string AppVersion { get; set; } = "0.8.1";
     public string Name { get; set; } = "Backup";
     public string? Description { get; set; }
     public List<string> Tags { get; set; } = [];

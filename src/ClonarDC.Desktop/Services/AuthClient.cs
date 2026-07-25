@@ -25,7 +25,7 @@ public sealed class AuthClient : IDisposable
             Timeout = TimeSpan.FromSeconds(20)
         };
         _http.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
-        _http.DefaultRequestHeaders.UserAgent.ParseAdd("GuildSync-Desktop/0.8.0");
+        _http.DefaultRequestHeaders.UserAgent.ParseAdd("GuildSync-Desktop/0.8.1");
     }
 
     public async Task<AppSession> LoginAsync(
