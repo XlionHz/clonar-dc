@@ -1,8 +1,9 @@
+using System.Net;
 using System.Net.Http.Headers;
 
 namespace ClonarDC.Services;
 
-public sealed class AuthClient
+public sealed class AuthClient : IDisposable
 {
     private readonly HttpClient _http;
     public string BaseUrl { get; }
@@ -11,7 +12,19 @@ public sealed class AuthClient
     public AuthClient(string? baseUrl = null)
     {
         BaseUrl = ApiEndpointResolver.Resolve(baseUrl);
-        _http = new HttpClient { BaseAddress = new Uri(BaseUrl + "/"), Timeout = TimeSpan.FromSeconds(20) };
+        var handler = new SocketsHttpHandler
+        {
+            AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate | DecompressionMethods.Brotli,
+            ConnectTimeout = TimeSpan.FromSeconds(10),
+            PooledConnectionLifetime = TimeSpan.FromMinutes(10)
+        };
+        _http = new HttpClient(handler)
+        {
+            BaseAddress = new Uri(BaseUrl + "/"),
+            Timeout = TimeSpan.FromSeconds(20)
+        };
+        _http.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+        _http.DefaultRequestHeaders.UserAgent.ParseAdd("GuildSync-Desktop/0.7.1");
     }
 
     public async Task<AppSession> LoginAsync(
@@ -26,11 +39,13 @@ public sealed class AuthClient
             bootstrapDeveloper ? password : null,
             ct);
 
-        var res = await PostAsync("auth/login", new { email, password }, ct);
+        using var res = await PostAsync("auth/login", new { email, password }, ct);
         if (!res.IsSuccessStatusCode) throw new InvalidOperationException(await ReadErrorAsync(res, ct));
-        var node = JsonNode.Parse(await res.Content.ReadAsStringAsync(ct)) ?? throw new InvalidOperationException("Resposta inválida do servidor.");
-        var token = node["accessToken"]?.GetValue<string>() ?? throw new InvalidOperationException("Sessão não retornada.");
-        var user = node["user"]!;
+        var node = JsonNode.Parse(await res.Content.ReadAsStringAsync(ct))
+                   ?? throw new InvalidOperationException("Resposta inválida do servidor.");
+        var token = node["accessToken"]?.GetValue<string>()
+                    ?? throw new InvalidOperationException("Sessão não retornada.");
+        var user = node["user"];
         var license = node["license"];
         return new AppSession(
             user?["email"]?.GetValue<string>() ?? email,
@@ -46,7 +61,7 @@ public sealed class AuthClient
     public async Task<string> RegisterAsync(string name, string email, string password, CancellationToken ct = default)
     {
         await LocalBackendManager.EnsureStartedAsync(BaseUrl, cancellationToken: ct);
-        var res = await PostAsync("auth/register", new { name, email, password }, ct);
+        using var res = await PostAsync("auth/register", new { name, email, password }, ct);
         if (!res.IsSuccessStatusCode) throw new InvalidOperationException(await ReadErrorAsync(res, ct));
         return "Conta criada. Agora escolha uma licença para ativar os recursos protegidos.";
     }
@@ -54,7 +69,8 @@ public sealed class AuthClient
     public async Task<AppSession> GetCurrentSessionAsync(AppSession session, CancellationToken ct = default)
     {
         using var res = await SendAuthorizedAsync(HttpMethod.Get, "me", session, null, ct);
-        var node = JsonNode.Parse(await res.Content.ReadAsStringAsync(ct)) ?? throw new InvalidOperationException("Resposta inválida do servidor.");
+        var node = JsonNode.Parse(await res.Content.ReadAsStringAsync(ct))
+                   ?? throw new InvalidOperationException("Resposta inválida do servidor.");
         return new AppSession(
             node["email"]?.GetValue<string>() ?? session.Email,
             node["name"]?.GetValue<string>() ?? session.DisplayName,
@@ -64,6 +80,16 @@ public sealed class AuthClient
                 node["status"]?.GetValue<string>() ?? session.License.Status,
                 ParseDate(node["expiresAt"]?.GetValue<string>()),
                 node["deviceLimit"]?.GetValue<int>() ?? session.License.DeviceLimit));
+    }
+
+    public async Task LogoutAsync(AppSession session, CancellationToken ct = default)
+    {
+        using var _ = await SendAuthorizedAsync(HttpMethod.Post, "auth/logout", session, null, ct);
+    }
+
+    public async Task LogoutAllAsync(AppSession session, CancellationToken ct = default)
+    {
+        using var _ = await SendAuthorizedAsync(HttpMethod.Post, "auth/logout-all", session, null, ct);
     }
 
     public async Task<PaymentPlansResponse> GetPaymentPlansAsync(CancellationToken ct = default)
@@ -83,7 +109,12 @@ public sealed class AuthClient
 
     public async Task<PaymentOrderDto> GetPaymentOrderAsync(AppSession session, string orderId, CancellationToken ct = default)
     {
-        using var res = await SendAuthorizedAsync(HttpMethod.Get, $"payments/orders/{Uri.EscapeDataString(orderId)}", session, null, ct);
+        using var res = await SendAuthorizedAsync(
+            HttpMethod.Get,
+            $"payments/orders/{Uri.EscapeDataString(orderId)}",
+            session,
+            null,
+            ct);
         return JsonSerializer.Deserialize<PaymentOrderDto>(await res.Content.ReadAsStringAsync(ct), JsonOptions)
                ?? throw new InvalidOperationException("O servidor não retornou o estado do pagamento.");
     }
@@ -114,23 +145,33 @@ public sealed class AuthClient
         return JsonSerializer.Deserialize<List<AdminUserDto>>(await res.Content.ReadAsStringAsync(ct), JsonOptions) ?? [];
     }
 
-    public async Task AdminActionAsync(AppSession session, string userId, string action, string? license = null, CancellationToken ct = default)
+    public async Task AdminActionAsync(
+        AppSession session,
+        string userId,
+        string action,
+        string? license = null,
+        CancellationToken ct = default)
     {
         await LocalBackendManager.EnsureStartedAsync(BaseUrl, cancellationToken: ct);
         using var _ = await SendAuthorizedAsync(
             HttpMethod.Post,
-            $"admin/users/{Uri.EscapeDataString(userId)}/{action}",
+            $"admin/users/{Uri.EscapeDataString(userId)}/{Uri.EscapeDataString(action)}",
             session,
             new { license },
             ct);
     }
 
-    private async Task<HttpResponseMessage> SendAuthorizedAsync(HttpMethod method, string path, AppSession session, object? body, CancellationToken ct)
+    private async Task<HttpResponseMessage> SendAuthorizedAsync(
+        HttpMethod method,
+        string path,
+        AppSession session,
+        object? body,
+        CancellationToken ct)
     {
         using var req = new HttpRequestMessage(method, path);
         req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", session.AccessToken);
         if (body is not null) req.Content = JsonContent.Create(body, options: JsonOptions);
-        var res = await _http.SendAsync(req, ct);
+        var res = await _http.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, ct);
         if (!res.IsSuccessStatusCode)
         {
             var error = await ReadErrorAsync(res, ct);
@@ -140,17 +181,39 @@ public sealed class AuthClient
         return res;
     }
 
-    private Task<HttpResponseMessage> PostAsync(string path, object body, CancellationToken ct) => _http.PostAsJsonAsync(path, body, JsonOptions, ct);
+    private Task<HttpResponseMessage> PostAsync(string path, object body, CancellationToken ct) =>
+        _http.PostAsJsonAsync(path, body, JsonOptions, ct);
 
     private static async Task<string> ReadErrorAsync(HttpResponseMessage response, CancellationToken ct)
     {
         var raw = await response.Content.ReadAsStringAsync(ct);
-        try { return JsonNode.Parse(raw)?["error"]?.GetValue<string>() ?? $"Erro HTTP {(int)response.StatusCode}."; }
-        catch { return string.IsNullOrWhiteSpace(raw) ? $"Erro HTTP {(int)response.StatusCode}." : raw; }
+        try
+        {
+            var message = JsonNode.Parse(raw)?["error"]?.GetValue<string>();
+            return SafeError(message, response.StatusCode);
+        }
+        catch
+        {
+            return SafeError(null, response.StatusCode);
+        }
     }
 
-    private static DateTimeOffset? ParseDate(string? value) => DateTimeOffset.TryParse(value, out var date) ? date : null;
-    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web) { PropertyNameCaseInsensitive = true };
+    private static string SafeError(string? message, HttpStatusCode statusCode)
+    {
+        if (string.IsNullOrWhiteSpace(message)) return $"Erro HTTP {(int)statusCode}.";
+        var normalized = message.Replace('\r', ' ').Replace('\n', ' ').Trim();
+        return normalized.Length > 400 ? normalized[..400] : normalized;
+    }
+
+    private static DateTimeOffset? ParseDate(string? value) =>
+        DateTimeOffset.TryParse(value, out var date) ? date : null;
+
+    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web)
+    {
+        PropertyNameCaseInsensitive = true
+    };
+
+    public void Dispose() => _http.Dispose();
 }
 
 public sealed record PaymentPlanDto(string Code, string Name, decimal Price, string Currency)
