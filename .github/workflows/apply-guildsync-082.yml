@@ -1,0 +1,208 @@
+name: Apply GuildSync 0.8.2 patch
+
+on:
+  push:
+    branches: [ agent/guildsync-0.8.2-login-experience ]
+    paths: [ .github/workflows/apply-guildsync-082.yml ]
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/guildsync-0.8.2-login-experience
+          fetch-depth: 0
+
+      - name: Generate final GuildSync assets
+        shell: pwsh
+        run: |
+          python -m pip install --disable-pip-version-check pillow
+          @'
+          from PIL import Image, ImageDraw, ImageFilter
+          from pathlib import Path
+
+          S = 1024
+          image = Image.new('RGBA', (S, S), (0, 0, 0, 0))
+
+          glow = Image.new('RGBA', image.size, (0,0,0,0))
+          gd = ImageDraw.Draw(glow)
+          gd.ellipse((135, 110, 890, 970), fill=(78, 54, 255, 105))
+          glow = glow.filter(ImageFilter.GaussianBlur(88))
+          image.alpha_composite(glow)
+
+          outer = [(512,54),(873,225),(873,545),(815,703),(715,851),(512,965),(309,851),(209,703),(151,545),(151,225)]
+          inner = [(512,188),(732,292),(732,532),(690,650),(620,753),(512,819),(404,753),(334,650),(292,532),(292,292)]
+          outline = [(512,63),(864,231),(864,539),(807,696),(708,842),(512,952),(316,842),(217,696),(160,539),(160,231)]
+
+          grad = Image.new('RGBA', image.size, (0,0,0,0))
+          gp = grad.load()
+          for y in range(S):
+              t = y/(S-1)
+              r = int(151*(1-t)+74*t)
+              g = int(82*(1-t)+103*t)
+              b = int(255*(1-t)+255*t)
+              for x in range(S): gp[x,y]=(r,g,b,255)
+          mask = Image.new('L', image.size, 0)
+          ImageDraw.Draw(mask).polygon(outer, fill=255)
+          image.alpha_composite(Image.composite(grad, Image.new('RGBA',image.size), mask))
+
+          d = ImageDraw.Draw(image)
+          d.line(outline+[outline[0]], fill=(222,207,255,255), width=9, joint='curve')
+          d.polygon(inner, fill=(8,12,32,255))
+          d.line([(512,194),(719,294)], fill=(215,205,255,220), width=6)
+          d.line([(305,294),(512,194)], fill=(215,205,255,220), width=6)
+
+          # Stylised G/arrow, matching the approved app mark.
+          d.arc((329,333,702,706), start=36, end=326, fill=(142,76,255,255), width=72)
+          d.line([(510,486),(700,486),(700,610)], fill=(76,99,255,255), width=74)
+          d.polygon([(700,565),(700,641),(642,699),(602,646)], fill=(76,99,255,255))
+
+          floor = Image.new('RGBA', image.size, (0,0,0,0))
+          fd = ImageDraw.Draw(floor)
+          fd.ellipse((270,915,754,942), fill=(99,70,255,130))
+          floor = floor.filter(ImageFilter.GaussianBlur(20))
+          image.alpha_composite(floor)
+
+          assets = Path('src/ClonarDC.Desktop/Assets')
+          assets.mkdir(parents=True, exist_ok=True)
+          image.save(assets/'GuildSyncLogo.png', optimize=True)
+          image.save(assets/'ClonarDCLogo.png', optimize=True)
+          image.save(assets/'GuildSync.ico', sizes=[(16,16),(24,24),(32,32),(48,48),(64,64),(128,128),(256,256)])
+          image.save(assets/'ClonarDC.ico', sizes=[(16,16),(24,24),(32,32),(48,48),(64,64),(128,128),(256,256)])
+          '@ | Set-Content generate_brand.py -Encoding UTF8
+          python generate_brand.py
+          Remove-Item generate_brand.py
+
+      - name: Apply source and release patch
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+
+          function Set-Text([string]$Path, [string]$Text) {
+            [IO.File]::WriteAllText((Join-Path $PWD $Path), $Text, [Text.UTF8Encoding]::new($false))
+          }
+          function Replace-Text([string]$Path, [string]$Old, [string]$New) {
+            $text = Get-Content $Path -Raw
+            if (-not $text.Contains($Old)) { throw "$Path does not contain expected text: $Old" }
+            Set-Text $Path ($text.Replace($Old, $New))
+          }
+          function Replace-Regex([string]$Path, [string]$Pattern, [string]$Replacement) {
+            $text = Get-Content $Path -Raw
+            $next = [regex]::Replace($text, $Pattern, $Replacement, [Text.RegularExpressions.RegexOptions]::Singleline)
+            if ($next -eq $text) { throw "$Path did not match regex: $Pattern" }
+            Set-Text $Path $next
+          }
+
+          Set-Text 'src/ClonarDC.Desktop/Services/TokenAuthorization.cs' @'
+          using System.Net.Http.Headers;
+
+          namespace ClonarDC.Services;
+
+          internal static class TokenAuthorization
+          {
+              public static AuthenticationHeaderValue Create(string? rawValue)
+              {
+                  var transportValue = (rawValue ?? string.Empty).Trim();
+                  if (AuthenticationHeaderValue.TryParse(transportValue, out var parsed) &&
+                      !string.IsNullOrWhiteSpace(parsed.Parameter))
+                      return parsed;
+
+                  // No local format, length, prefix, account-type or identity decision.
+                  // A plain value uses the existing Discord Bot transport for backwards compatibility;
+                  // explicit schemes such as "Bot ..." or "Bearer ..." are preserved unchanged.
+                  return new AuthenticationHeaderValue("Bot", transportValue);
+              }
+          }
+          '@
+
+          Replace-Regex 'src/ClonarDC.Desktop/Services/DiscordService.cs' 'public void SetToken\(string token\)\s*\{.*?\n    \}' @'
+          public void SetToken(string token)
+              {
+                  _token = token ?? string.Empty;
+                  _http.DefaultRequestHeaders.Authorization = TokenAuthorization.Create(_token);
+                  if (!_http.DefaultRequestHeaders.UserAgent.Any())
+                      _http.DefaultRequestHeaders.UserAgent.ParseAdd("GuildSync-Desktop/0.8.2");
+              }
+          '@
+
+          Replace-Regex 'src/ClonarDC.Desktop/Services/GuildSyncEngine.cs' 'public void SetToken\(string token\)\s*\{.*?\n    \}' @'
+          public void SetToken(string token)
+              {
+                  _token = token ?? string.Empty;
+                  _http.DefaultRequestHeaders.Authorization = TokenAuthorization.Create(_token);
+                  _captureService.SetToken(_token);
+              }
+          '@
+
+          Replace-Regex 'src/ClonarDC.Desktop/Services/DiscordPreflightService.cs' 'public void SetToken\(string token\)\s*\{.*?\n    \}' @'
+          public void SetToken(string token)
+              {
+                  _http.DefaultRequestHeaders.Authorization = TokenAuthorization.Create(token);
+              }
+          '@
+
+          $probe = 'src/ClonarDC.Desktop/Services/DiscordConnectionProbe.cs'
+          $probeText = Get-Content $probe -Raw
+          $probeText = [regex]::Replace($probeText, 'if \(token\.Length < 20\)\s*throw new InvalidOperationException\([^;]+;', '', 'Singleline')
+          $probeText = [regex]::Replace($probeText, 'if \(me\["bot"\]\?\.GetValue<bool>\(\) != true\)\s*throw new InvalidOperationException\([^;]+;', '', 'Singleline')
+          $probeText = [regex]::Replace($probeText, 'public static string NormalizeToken\(string rawToken\)\s*\{.*?\n    \}', "public static string NormalizeToken(string rawToken)`r`n    {`r`n        return rawToken ?? string.Empty;`r`n    }", 'Singleline')
+          $probeText = $probeText.Replace('client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bot", token);', 'client.DefaultRequestHeaders.Authorization = TokenAuthorization.Create(token);')
+          $probeText = $probeText.Replace('Clonar DC', 'GuildSync').Replace('0.5.3', '0.8.2')
+          Set-Text $probe $probeText
+
+          # User-visible branding. Internal namespaces/executable compatibility remain unchanged.
+          Get-ChildItem 'src/ClonarDC.Desktop' -Recurse -File -Include *.cs,*.xaml,*.txt |
+            ForEach-Object {
+              $text = Get-Content $_.FullName -Raw
+              $text = $text.Replace('Clonar DC', 'GuildSync')
+              $text = $text.Replace('v0.5.0 alpha', 'v0.8.2 alpha')
+              Set-Text $_.FullName $text
+            }
+
+          # Version-bearing text files, excluding immutable release history/status snapshots.
+          $versionFiles = git grep -l '0.8.1' -- ':!CHANGELOG.md' ':!build-status/**'
+          foreach ($file in $versionFiles) {
+            $text = Get-Content $file -Raw
+            Set-Text $file ($text.Replace('0.8.1', '0.8.2'))
+          }
+
+          $changelog = Get-Content CHANGELOG.md -Raw
+          $entry = @'
+          ## 0.8.2 — Login Experience and Input Fixes
+
+          - Rebuilt the login screen from the approved premium concept with a real WPF animation opening the Welcome back panel toward the left.
+          - Replaced mixed/legacy app branding with one GuildSync vector identity across login, main window, registration, confirmations, update publishing, taskbar and installer assets.
+          - Renamed the credential field to Token and removed local format, length, prefix and account-type rejection.
+          - Made source and destination server controls editable so IDs can always be typed directly.
+          - Preserved loaded-server selection while supporting manual IDs without requiring the dropdown to contain an item.
+          - Fixed .NET 10 reliability-test assembly discovery.
+
+          '@
+          Set-Text CHANGELOG.md ($entry + $changelog)
+
+          # Contracts for the exact regressions reported by the user.
+          $contracts = Get-Content scripts/Test-SourceContracts.ps1 -Raw
+          if (-not $contracts.Contains('TokenAuthorization.cs')) {
+            $contracts = $contracts.Replace("Require-Text 'src/ClonarDC.Desktop/MainWindow.TokenValidation.cs'", "Require-Text 'src/ClonarDC.Desktop/Services/TokenAuthorization.cs' @('No local format, length, prefix', 'AuthenticationHeaderValue.TryParse')`r`nRequire-Text 'src/ClonarDC.Desktop/MainWindow.TokenValidation.cs'")
+          }
+          $contracts += @'
+
+          $desktopFiles = Get-ChildItem 'src/ClonarDC.Desktop' -Recurse -File -Include *.cs,*.xaml
+          foreach ($desktopFile in $desktopFiles) {
+              $source = Get-Content $desktopFile.FullName -Raw
+              if ($source.Contains('Token do bot inválido') -or $source.Contains('accepts only an official bot token')) {
+                  throw "Legacy local token-type rejection remains in $($desktopFile.FullName)"
+              }
+          }
+          '@
+          Set-Text scripts/Test-SourceContracts.ps1 $contracts
+
+          git config user.name 'GuildSync Release Bot'
+          git config user.email 'actions@users.noreply.github.com'
+          git add -A
+          git commit -m 'release: complete GuildSync 0.8.2 login, branding and input fixes'
+          git push origin HEAD:agent/guildsync-0.8.2-login-experience
