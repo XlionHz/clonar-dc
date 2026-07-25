@@ -10,13 +10,17 @@ function Require-Text {
     }
 }
 
-Require-Text 'src/ClonarDC.Desktop/ClonarDC.Desktop.csproj' @('<Version>0.8.0</Version>', '<Product>GuildSync</Product>')
-Require-Text 'src/ClonarDC.Server/ClonarDC.Server.csproj' @('<Version>0.8.0</Version>', '<Product>GuildSync API</Product>')
-Require-Text 'src/GuildSync.Bot/GuildSync.Bot.csproj' @('<Version>0.8.0</Version>', '<Product>GuildSync Bot</Product>')
-Require-Text 'installer/ClonarDC.iss' @('MyAppName "GuildSync"', 'MyAppVersion "0.8.0"', 'GuildSync-Setup', 'GuildSync.ico')
-Require-Text 'src/ClonarDC.Server/Program.cs' @('/auth/logout', '/auth/logout-all', 'SlidingWindowLimiter', 'suspended', 'RevokeAllSessionsAsync', 'Content-Security-Policy', 'DevicePolicy.RequireIdentity', 'deviceCount')
+Require-Text 'src/ClonarDC.Desktop/ClonarDC.Desktop.csproj' @('<Version>0.8.1</Version>', '<Product>GuildSync</Product>')
+Require-Text 'src/ClonarDC.Server/ClonarDC.Server.csproj' @('<Version>0.8.1</Version>', '<Product>GuildSync API</Product>')
+Require-Text 'src/GuildSync.Bot/GuildSync.Bot.csproj' @('<Version>0.8.1</Version>', '<Product>GuildSync Bot</Product>')
+Require-Text 'installer/ClonarDC.iss' @('MyAppName "GuildSync"', 'MyAppVersion "0.8.1"', 'GuildSync-Setup', 'GuildSync.ico')
+Require-Text 'src/ClonarDC.Server/Program.cs' @('/auth/logout', '/auth/logout-all', 'SlidingWindowLimiter', 'suspended', 'RevokeAllSessionsAsync', 'Content-Security-Policy', 'DevicePolicy.RequireIdentity', 'deviceCount', 'bootstrap-admin-synchronized')
 Require-Text 'src/ClonarDC.Server/DeviceManagement.cs' @('/devices/claim', '/devices/{deviceId}', 'DeviceIdHash', 'FixedTimeDeviceHashEquals', 'ResetDevicesAsync')
 Require-Text 'src/ClonarDC.Server/StatePersistence.cs' @('GUILDSYNC_ALLOW_FILE_STORAGE', 'pg_advisory_xact_lock', 'concurrent database writer', 'revision bigint')
+Require-Text 'src/ClonarDC.Desktop/BrandPresentation.cs' @('CreateCroppedLogoBrush', 'Viewbox = new Rect(0.28, 0.28, 0.44, 0.44)', 'CreateSidebarHeader')
+Require-Text 'src/ClonarDC.Desktop/LoginWindow.xaml' @('BrandMarkHost', 'Welcome back', 'BackendModeText')
+Require-Text 'src/ClonarDC.Desktop/LoginWindow.xaml.cs' @('LOCAL DEVELOPER MODE', 'Central administrator access is unavailable', 'bootstrapDeveloper: true')
+Require-Text 'src/ClonarDC.Desktop/AlphaFixes.cs' @('ContentSource="SelectedContent"', 'BrandPresentation.CreateSidebarHeader', 'Pages.SelectedIndex = 0')
 Require-Text 'src/ClonarDC.Desktop/Services/GuildSyncEngine.cs' @('CloneExecutionReport', 'VerifySnapshot', 'ChannelKey', 'SendWithRetryAsync', 'completed-with-differences')
 Require-Text 'src/ClonarDC.Desktop/Services/DiscordPreflightService.cs' @(
     'ManageChannels',
@@ -33,7 +37,7 @@ Require-Text 'src/ClonarDC.Desktop/Services/OperationReportService.cs' @('FindLa
 Require-Text 'src/ClonarDC.Desktop/Services/DeviceIdentityService.cs' @('RandomNumberGenerator.GetBytes(32)', 'SecureTokenStore', 'DeviceIdentity')
 Require-Text 'src/GuildSync.Bot/Program.cs' @('WithName("status")', 'AllowedMentions.None', 'Error ID')
 Require-Text 'render.yaml' @('GUILDSYNC_ENV', 'GUILDSYNC_ALLOW_FILE_STORAGE', 'GUILDSYNC_REQUIRE_DEVICE_ID', 'MERCADOPAGO_ALLOW_UNSIGNED_WEBHOOKS', 'GUILDSYNC_PRICE_1M')
-Require-Text '.github/workflows/final-release.yml' @("APP_VERSION: '0.8.0'", 'Test-EngineReliability.ps1', 'Run API and device behavior smoke test')
+Require-Text '.github/workflows/final-release.yml' @("APP_VERSION: '0.8.1'", 'Test-EngineReliability.ps1', 'Run API and device behavior smoke test')
 
 $trackedText = git ls-files | Where-Object {
     $_ -notmatch '\.(png|ico|exe|zip|dll|pdb|jpeg|jpg|gif|webp)$'
@@ -56,4 +60,4 @@ foreach ($file in $trackedText) {
     }
 }
 
-Write-Host 'GuildSync 0.8 source contracts and secret scan passed.'
+Write-Host 'GuildSync 0.8.1 source contracts and secret scan passed.'
