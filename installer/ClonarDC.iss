@@ -1,5 +1,5 @@
 #define MyAppName "GuildSync"
-#define MyAppVersion "0.8.0"
+#define MyAppVersion "0.8.1"
 #define MyAppPublisher "GuildSync"
 #define MyAppExeName "ClonarDC.exe"
 
@@ -9,7 +9,7 @@ AppName={#MyAppName}
 AppVerName={#MyAppName} {#MyAppVersion}
 AppVersion={#MyAppVersion}
 AppPublisher={#MyAppPublisher}
-VersionInfoVersion=0.8.0.0
+VersionInfoVersion=0.8.1.0
 DefaultDirName={localappdata}\Programs\GuildSync
 DefaultGroupName=GuildSync
 DisableProgramGroupPage=yes
