@@ -15,7 +15,7 @@ concurrency:
 jobs:
   build-and-smoke:
     runs-on: windows-latest
-    timeout-minutes: 40
+    timeout-minutes: 45
 
     steps:
       - name: Checkout
@@ -50,7 +50,7 @@ jobs:
         shell: pwsh
         run: ./scripts/Test-EngineReliability.ps1
 
-      - name: Publish API for smoke test
+      - name: Publish API for smoke tests
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
@@ -68,6 +68,19 @@ jobs:
           }
           catch {
             $_ | Format-List * -Force | Out-String | Tee-Object -FilePath out/diagnostics/api-smoke.log -Append
+            throw
+          }
+
+      - name: Test configured administrator reconciliation
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          try {
+            ./scripts/Test-AdminReconciliation.ps1 -BackendPath "$PWD/out/backend/ClonarDC.Server.dll" -ExpectedVersion '0.8.1' *>&1 |
+              Tee-Object -FilePath out/diagnostics/admin-reconciliation.log
+          }
+          catch {
+            $_ | Format-List * -Force | Out-String | Tee-Object -FilePath out/diagnostics/admin-reconciliation.log -Append
             throw
           }
 
