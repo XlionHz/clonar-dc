@@ -129,7 +129,7 @@ jobs:
       - name: Upload verified artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: GuildSync-Verified-Windows-${{ env.APP_VERSION }}
+          name: GuildSync-Verified-Windows-${{ env.APP_VERSION }}-${{ github.run_number }}
           path: |
             out/installer/GuildSync-Setup.exe
             out/installer/GuildSync-Setup.sha256
@@ -144,7 +144,9 @@ jobs:
             docs/**
           if-no-files-found: error
 
-      - name: Create prerelease
+      - name: Create or update prerelease
+        id: publish_release
+        continue-on-error: true
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
@@ -153,7 +155,31 @@ jobs:
           $tag = "v$env:APP_VERSION-alpha.$env:GITHUB_RUN_NUMBER"
           $title = "GuildSync $env:APP_VERSION Alpha $env:GITHUB_RUN_NUMBER"
           $notes = 'Authentication and session hardening, safe production storage, improved bot lifecycle, version alignment and verified installer/update packaging.'
-          gh release create $tag 'out/installer/GuildSync-Setup.exe' 'out/installer/GuildSync-Setup.sha256' "out/GuildSync-$env:APP_VERSION.clonardc-update" --title $title --notes $notes --target $env:GITHUB_SHA --prerelease
+          $assets = @(
+            'out/installer/GuildSync-Setup.exe',
+            'out/installer/GuildSync-Setup.sha256',
+            "out/GuildSync-$env:APP_VERSION.clonardc-update"
+          )
+
+          & gh release view $tag --json tagName *> $null
+          if ($LASTEXITCODE -ne 0) {
+            & gh release create $tag --title $title --notes $notes --target $env:GITHUB_SHA --prerelease
+            if ($LASTEXITCODE -ne 0) { throw "Could not create prerelease $tag." }
+          }
+          else {
+            & gh release edit $tag --title $title --notes $notes --prerelease
+            if ($LASTEXITCODE -ne 0) { throw "Could not update prerelease $tag." }
+          }
+
+          & gh release upload $tag @assets --clobber
+          if ($LASTEXITCODE -ne 0) { throw "Could not upload assets to prerelease $tag." }
+          "RELEASE_TAG=$tag" | Add-Content $env:GITHUB_ENV
+
+      - name: Report release publication warning
+        if: steps.publish_release.outcome == 'failure'
+        shell: pwsh
+        run: |
+          Write-Warning 'Verified build artifacts were uploaded to GitHub Actions, but GitHub Releases publication failed. The verified build remains valid.'
 
       - name: Record successful build
         if: success()
@@ -167,6 +193,7 @@ jobs:
             "Version: $env:APP_VERSION",
             "Source commit: $env:GITHUB_SHA",
             "Workflow run: https://github.com/$env:GITHUB_REPOSITORY/actions/runs/$env:GITHUB_RUN_ID",
+            "Release publication: ${{ steps.publish_release.outcome }}",
             "SHA-256: $hash",
             '',
             'Validation: desktop, API and bot compiled; API behavior, session revocation, installer and update package verified.'
