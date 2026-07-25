@@ -1,4 +1,4 @@
-name: Apply GuildSync 0.8.1 Admin Reconciliation
+name: Apply GuildSync 0.8.1 Hotfix Patches
 
 on:
   push:
@@ -8,7 +8,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: guildsync-081-admin-reconcile
+  group: guildsync-081-hotfix-patches
   cancel-in-progress: true
 
 jobs:
@@ -25,16 +25,20 @@ jobs:
         shell: pwsh
         run: ./scripts/Apply-081-AdminReconcile.ps1
 
-      - name: Commit generated server change
+      - name: Align GuildSync 0.8.1 versions
+        shell: pwsh
+        run: ./scripts/Apply-081-VersionPatch.ps1
+
+      - name: Commit generated hotfix source
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          if (-not (git status --porcelain -- src/ClonarDC.Server/Program.cs)) {
-            Write-Host 'Program.cs already contains the hotfix.'
+          if (-not (git status --porcelain)) {
+            Write-Host 'All 0.8.1 hotfix patches are already integrated.'
             exit 0
           }
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add src/ClonarDC.Server/Program.cs
-          git commit -m 'auth: reconcile configured administrator credentials [skip ci]'
+          git add src installer scripts README.md .github/workflows/final-release.yml .github/workflows/pull-request-quality.yml
+          git commit -m 'release: align GuildSync 0.8.1 brand and admin hotfix [skip ci]'
           git push origin HEAD:agent/guildsync-0.8.1-brand-admin-hotfix
