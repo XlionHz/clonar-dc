@@ -37,11 +37,13 @@ public sealed class DiscordPreflightService : IDisposable
         string guildId,
         string mode,
         bool requiresExpressions,
+        IEnumerable<string>? sourceRolePermissions = null,
         CancellationToken ct = default)
     {
         if (string.IsNullOrWhiteSpace(guildId) || !guildId.All(char.IsDigit))
             throw new InvalidOperationException("ID do servidor de destino inválido.");
 
+        mode = mode.Trim().ToLowerInvariant();
         var me = await GetAsync("users/@me", ct);
         var botId = me["id"]?.GetValue<string>()
                     ?? throw new InvalidDataException("O Discord não devolveu a identidade do bot.");
@@ -76,6 +78,7 @@ public sealed class DiscordPreflightService : IDisposable
             BotId = botId,
             BotName = me["global_name"]?.GetValue<string>() ?? me["username"]?.GetValue<string>() ?? "GuildSync bot",
             HighestRolePosition = highestPosition,
+            EffectivePermissions = permissions.ToString(),
             Administrator = administrator
         };
 
@@ -85,9 +88,27 @@ public sealed class DiscordPreflightService : IDisposable
             report.BlockingIssues.Add("O bot precisa da permissão Manage Channels para criar, atualizar, ordenar ou remover canais.");
         if (!administrator && !Has(permissions, ManageRoles))
             report.BlockingIssues.Add("O bot precisa da permissão Manage Roles para criar cargos e aplicar permissões de canais.");
-        if (requiresExpressions && !administrator &&
-            !Has(permissions, ManageGuildExpressions) && !Has(permissions, CreateGuildExpressions))
-            report.BlockingIssues.Add("O bot precisa de Manage Expressions ou Create Expressions para copiar emojis.");
+
+        if (requiresExpressions && !administrator)
+        {
+            if (mode == "exact" && !Has(permissions, ManageGuildExpressions))
+                report.BlockingIssues.Add("O modo Exact precisa de Manage Expressions para remover e recriar emojis existentes.");
+            else if (!Has(permissions, ManageGuildExpressions) && !Has(permissions, CreateGuildExpressions))
+                report.BlockingIssues.Add("O bot precisa de Manage Expressions ou Create Expressions para copiar emojis.");
+        }
+
+        if (!administrator && sourceRolePermissions is not null)
+        {
+            var requestedPermissions = BigInteger.Zero;
+            foreach (var value in sourceRolePermissions)
+            {
+                if (BigInteger.TryParse(value, out var parsed) && parsed >= 0)
+                    requestedPermissions |= parsed;
+            }
+            var unavailable = requestedPermissions & ~permissions;
+            if (unavailable != BigInteger.Zero)
+                report.BlockingIssues.Add("A origem contém permissões de cargos que o bot não possui no destino. Conceda as permissões necessárias ao bot ou remova-as dos cargos de origem antes de clonar.");
+        }
 
         var unmanageableRoles = roles
             .Where(roleNode => roleNode is not null)
@@ -102,11 +123,26 @@ public sealed class DiscordPreflightService : IDisposable
         if (!administrator && unmanageableRoles.Count > 0)
         {
             var names = string.Join(", ", unmanageableRoles);
-            if (string.Equals(mode, "exact", StringComparison.OrdinalIgnoreCase))
+            if (mode == "exact")
                 report.BlockingIssues.Add("O modo Exact não pode remover cargos acima ou no mesmo nível do cargo mais alto do bot: " + names + ". Mova o cargo do bot para cima.");
             else
                 report.Warnings.Add("Alguns cargos estão acima do bot e não poderão ser atualizados ou reposicionados: " + names + ".");
         }
+
+        var features = guild["features"]?.AsArray()
+            .Select(node => node?.GetValue<string>())
+            .Where(value => !string.IsNullOrWhiteSpace(value))
+            .Cast<string>()
+            .ToHashSet(StringComparer.OrdinalIgnoreCase) ?? [];
+        var protectedChannels = new[]
+        {
+            guild["rules_channel_id"]?.GetValue<string>(),
+            guild["public_updates_channel_id"]?.GetValue<string>(),
+            guild["safety_alerts_channel_id"]?.GetValue<string>()
+        }.Where(value => !string.IsNullOrWhiteSpace(value)).Distinct(StringComparer.Ordinal).ToList();
+
+        if (mode == "exact" && features.Contains("COMMUNITY") && protectedChannels.Count > 0)
+            report.BlockingIssues.Add("O destino é um servidor Community com canais protegidos pelo Discord. Use Merge/Safe ou reconfigure/desative Community manualmente antes do modo Exact.");
 
         if (administrator)
             report.Warnings.Add("O bot possui Administrator. A operação terá acesso amplo; mantenha esta permissão apenas enquanto for necessária.");
@@ -150,6 +186,7 @@ public sealed class DiscordPreflightReport
     public string BotId { get; set; } = string.Empty;
     public string BotName { get; set; } = string.Empty;
     public int HighestRolePosition { get; set; }
+    public string EffectivePermissions { get; set; } = "0";
     public bool Administrator { get; set; }
     public bool Passed { get; set; }
     public List<string> BlockingIssues { get; set; } = [];
