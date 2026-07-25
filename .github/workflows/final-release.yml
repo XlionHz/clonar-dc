@@ -17,9 +17,9 @@ concurrency:
 jobs:
   build-release:
     runs-on: windows-latest
-    timeout-minutes: 60
+    timeout-minutes: 70
     env:
-      APP_VERSION: '0.7.1'
+      APP_VERSION: '0.8.0'
 
     steps:
       - name: Checkout
@@ -45,21 +45,25 @@ jobs:
           dotnet build ./src/ClonarDC.Server/ClonarDC.Server.csproj -c Release --no-restore
           dotnet build ./src/GuildSync.Bot/GuildSync.Bot.csproj -c Release --no-restore
 
+      - name: Test engine reliability contracts
+        shell: pwsh
+        run: ./scripts/Test-EngineReliability.ps1
+
       - name: Publish desktop, API and bot
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
           $fullVersion = "$env:APP_VERSION.$env:GITHUB_RUN_NUMBER"
           New-Item -ItemType Directory -Force -Path out/app,out/backend,out/bot,out/installer | Out-Null
-          dotnet publish ./src/ClonarDC.Desktop/ClonarDC.Desktop.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=false -p:DebugType=None -p:DebugSymbols=false -p:Version=$env:APP_VERSION -p:FileVersion=$fullVersion -p:AssemblyVersion=0.7.1.0 -o out/app
-          dotnet publish ./src/ClonarDC.Server/ClonarDC.Server.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=false -p:DebugType=None -p:DebugSymbols=false -p:Version=$env:APP_VERSION -p:FileVersion=$fullVersion -p:AssemblyVersion=0.7.1.0 -o out/backend
-          dotnet publish ./src/GuildSync.Bot/GuildSync.Bot.csproj -c Release -r linux-x64 --self-contained false -p:DebugType=None -p:DebugSymbols=false -p:Version=$env:APP_VERSION -p:AssemblyVersion=0.7.1.0 -o out/bot
+          dotnet publish ./src/ClonarDC.Desktop/ClonarDC.Desktop.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=false -p:DebugType=None -p:DebugSymbols=false -p:Version=$env:APP_VERSION -p:FileVersion=$fullVersion -p:AssemblyVersion=0.8.0.0 -o out/app
+          dotnet publish ./src/ClonarDC.Server/ClonarDC.Server.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=false -p:DebugType=None -p:DebugSymbols=false -p:Version=$env:APP_VERSION -p:FileVersion=$fullVersion -p:AssemblyVersion=0.8.0.0 -o out/backend
+          dotnet publish ./src/GuildSync.Bot/GuildSync.Bot.csproj -c Release -r linux-x64 --self-contained false -p:DebugType=None -p:DebugSymbols=false -p:Version=$env:APP_VERSION -p:AssemblyVersion=0.8.0.0 -o out/bot
           if (-not (Test-Path out/app/ClonarDC.exe)) { throw 'GuildSync desktop executable was not generated.' }
           if (-not (Test-Path out/app/api-url.txt)) { throw 'api-url.txt was not published.' }
           if (-not (Test-Path out/backend/ClonarDC.Server.exe)) { throw 'GuildSync API executable was not generated.' }
           if (-not (Test-Path out/bot/GuildSync.Bot.dll)) { throw 'GuildSync bot was not generated.' }
 
-      - name: Run API behavior smoke test
+      - name: Run API and device behavior smoke test
         shell: pwsh
         run: ./scripts/Test-GuildSyncApi.ps1 -BackendPath "$PWD/out/backend/ClonarDC.Server.exe" -ExpectedVersion $env:APP_VERSION
 
@@ -68,16 +72,16 @@ jobs:
         run: |
           $ErrorActionPreference = 'Stop'
           $process = Start-Process -FilePath "$PWD/out/app/ClonarDC.exe" -PassThru
-          Start-Sleep -Seconds 8
+          Start-Sleep -Seconds 10
           if ($process.HasExited) { throw "GuildSync exited early with code $($process.ExitCode)." }
           Stop-Process -Id $process.Id -Force
-          'GuildSync desktop stayed alive for 8 seconds.' | Set-Content out/desktop-smoke.txt
+          'GuildSync desktop stayed alive for 10 seconds.' | Set-Content out/desktop-smoke.txt
 
       - name: Install Inno Setup
         shell: pwsh
         run: choco install innosetup --no-progress -y
 
-      - name: Build installer and signed-hash update package
+      - name: Build installer and verified update package
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
@@ -99,7 +103,7 @@ jobs:
             version = $env:APP_VERSION
             tag = "v$env:APP_VERSION"
             title = "GuildSync $env:APP_VERSION"
-            notes = 'Production hardening for authentication, sessions, persistence, bot lifecycle, deployment and release validation.'
+            notes = 'Resumable and verified cloning engine, backup format v2, Discord permission preflight, licensed-device enforcement and expanded reliability diagnostics.'
             setupFile = 'GuildSync-Setup.exe'
             sha256 = $hash
           } | ConvertTo-Json -Depth 4 | Set-Content (Join-Path $packageRoot 'manifest.json') -Encoding UTF8
@@ -124,7 +128,9 @@ jobs:
           if (-not (Test-Path (Join-Path $root 'ClonarDC.exe'))) { throw 'Installed GuildSync app was not found.' }
           if (-not (Test-Path (Join-Path $root 'backend\ClonarDC.Server.exe'))) { throw 'Installed GuildSync API was not found.' }
           if ((Get-Content (Join-Path $root 'api-url.txt') -Raw).Trim() -ne 'https://clonar-dc-api.onrender.com') { throw 'Installed central API URL is incorrect.' }
-          'GuildSync installer passed.' | Set-Content out/installer-smoke.txt
+          $installedVersion = (Get-Item (Join-Path $root 'ClonarDC.exe')).VersionInfo.ProductVersion
+          if (-not $installedVersion.StartsWith($env:APP_VERSION)) { throw "Installed desktop version is unexpected: $installedVersion" }
+          'GuildSync 0.8 installer passed.' | Set-Content out/installer-smoke.txt
 
       - name: Upload verified artifacts
         uses: actions/upload-artifact@v4
@@ -154,7 +160,7 @@ jobs:
           $ErrorActionPreference = 'Stop'
           $tag = "v$env:APP_VERSION-alpha.$env:GITHUB_RUN_NUMBER"
           $title = "GuildSync $env:APP_VERSION Alpha $env:GITHUB_RUN_NUMBER"
-          $notes = 'Authentication and session hardening, safe production storage, improved bot lifecycle, version alignment and verified installer/update packaging.'
+          $notes = 'Resumable engine, post-operation verification, backup v2, Discord permission preflight, device limits and expanded production safeguards.'
           $assets = @(
             'out/installer/GuildSync-Setup.exe',
             'out/installer/GuildSync-Setup.sha256',
@@ -178,8 +184,7 @@ jobs:
       - name: Report release publication warning
         if: steps.publish_release.outcome == 'failure'
         shell: pwsh
-        run: |
-          Write-Warning 'Verified build artifacts were uploaded to GitHub Actions, but GitHub Releases publication failed. The verified build remains valid.'
+        run: Write-Warning 'Verified artifacts were uploaded to GitHub Actions, but GitHub Releases publication failed.'
 
       - name: Record successful build
         if: success()
@@ -196,7 +201,7 @@ jobs:
             "Release publication: ${{ steps.publish_release.outcome }}",
             "SHA-256: $hash",
             '',
-            'Validation: desktop, API and bot compiled; API behavior, session revocation, installer and update package verified.'
+            'Validation: desktop, API and bot compiled; engine reliability, backup v2, device limits, session revocation, runtime, installer and update package verified.'
           ) | Set-Content build-status/latest.md -Encoding UTF8
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'

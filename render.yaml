@@ -24,6 +24,8 @@ services:
         value: "12"
       - key: GUILDSYNC_ALLOW_FILE_STORAGE
         value: "false"
+      - key: GUILDSYNC_REQUIRE_DEVICE_ID
+        value: "false"
       - key: MERCADOPAGO_ACCESS_TOKEN
         sync: false
       - key: MERCADOPAGO_WEBHOOK_SECRET
