@@ -99,6 +99,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          # GitHub's workflow token cannot modify workflow definitions. Those two
+          # reviewed files are applied immediately afterward through the GitHub connector.
+          git checkout origin/main -- .github/workflows/final-release.yml .github/workflows/pull-request-quality.yml
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add -A
