@@ -10,10 +10,10 @@
     <Company>GuildSync</Company>
     <Authors>GuildSync</Authors>
     <Description>Central accounts, payments, licenses, devices and Discord integration for GuildSync.</Description>
-    <Version>0.8.2</Version>
-    <FileVersion>0.8.2.0</FileVersion>
-    <AssemblyVersion>0.8.2.0</AssemblyVersion>
-    <InformationalVersion>0.8.2-alpha</InformationalVersion>
+    <Version>0.8.3.2</Version>
+    <FileVersion>0.8.3.2</FileVersion>
+    <AssemblyVersion>0.8.3.2</AssemblyVersion>
+    <InformationalVersion>0.8.3.2-recovery</InformationalVersion>
     <Deterministic>true</Deterministic>
   </PropertyGroup>
   <ItemGroup>
