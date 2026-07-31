@@ -20,6 +20,7 @@ jobs:
     timeout-minutes: 80
     env:
       APP_VERSION: '0.8.3.2'
+      API_VERSION: '0.8.3'
 
     steps:
       - name: Checkout
@@ -77,7 +78,7 @@ jobs:
 
       - name: Run API and device behavior smoke test
         shell: pwsh
-        run: ./scripts/Test-GuildSyncApi.ps1 -BackendPath "$PWD/out/backend/ClonarDC.Server.exe" -ExpectedVersion $env:APP_VERSION
+        run: ./scripts/Test-GuildSyncApi.ps1 -BackendPath "$PWD/out/backend/ClonarDC.Server.exe" -ExpectedVersion $env:API_VERSION
 
       - name: Desktop runtime smoke test
         shell: pwsh
