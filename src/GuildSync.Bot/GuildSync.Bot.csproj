@@ -11,10 +11,10 @@
     <Company>GuildSync</Company>
     <Authors>GuildSync</Authors>
     <Description>Official slash-command bot for GuildSync account linking, licenses and checkout.</Description>
-    <Version>0.8.3.2</Version>
-    <FileVersion>0.8.3.2</FileVersion>
-    <AssemblyVersion>0.8.3.2</AssemblyVersion>
-    <InformationalVersion>0.8.3.2-recovery</InformationalVersion>
+    <Version>0.8.3.3</Version>
+    <FileVersion>0.8.3.3</FileVersion>
+    <AssemblyVersion>0.8.3.3</AssemblyVersion>
+    <InformationalVersion>0.8.3.3-provider-separation</InformationalVersion>
     <Deterministic>true</Deterministic>
   </PropertyGroup>
   <ItemGroup>

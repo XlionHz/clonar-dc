@@ -2,7 +2,7 @@ param(
     [Parameter(Mandatory = $true)]
     [string]$BackendPath,
 
-    [string]$ExpectedVersion = '0.8.2'
+    [string]$ExpectedVersion = '0.8.3.3'
 )
 
 $ErrorActionPreference = 'Stop'

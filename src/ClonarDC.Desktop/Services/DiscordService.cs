@@ -16,7 +16,7 @@ public sealed class DiscordService : IDisposable
         _token = token ?? string.Empty;
         _http.DefaultRequestHeaders.Authorization = TokenAuthorization.Create(_token);
         if (!_http.DefaultRequestHeaders.UserAgent.Any())
-            _http.DefaultRequestHeaders.UserAgent.ParseAdd("GuildSync-Desktop/0.8.2");
+            _http.DefaultRequestHeaders.UserAgent.ParseAdd("GuildSync-Desktop/0.8.3.3");
     }
 
     public async Task<string> ValidateTokenAsync(CancellationToken ct = default)

@@ -17,12 +17,14 @@ public partial class MainWindow
         if (_compatibilityUiInitialized) return;
         _compatibilityUiInitialized = true;
 
-        // Replace the XAML handlers with compatibility-aware wrappers. Real tokens still
-        // execute the production engine; rejected/unavailable tokens stay in a safe simulation.
+        // Route the existing interface through either the official provider or the complete
+        // simulated provider. Token admission remains permissive by default.
         AnalyzeEngineButton.Click -= Analyze08_Click;
         AnalyzeEngineButton.Click += AnalyzeCompatible_Click;
         CloneButton.Click -= Clone08_Click;
         CloneButton.Click += CloneCompatible_Click;
+        RestoreBackupButton08.Click -= RestoreBackup08_Click;
+        RestoreBackupButton08.Click += RestoreBackupCompatible_Click;
 
         LinkDiscordButton.Click += LinkDiscord_Click;
         DiscordLinkStatusText.Text = "Generate a one-time code with /link in the official GuildSync bot.";
@@ -82,42 +84,15 @@ public partial class MainWindow
         {
             var source = RequireEditableGuild(SourceGuildBox, "source server");
             var target = RequireEditableGuild(TargetGuildBox, "destination server");
-            if (source.Id == target.Id)
-                throw new InvalidOperationException("The source and destination servers cannot be the same.");
-
-            var mode = SelectedMode();
-            _currentSourceSnapshot = CreatePreviewSnapshot(source);
-            _currentPlan = new ClonePlan
-            {
-                SourceGuildId = source.Id,
-                SourceGuildName = source.Name,
-                TargetGuildId = target.Id,
-                TargetGuildName = target.Name,
-                Mode = mode,
-                RolesToCreate = 4,
-                RolesToUpdate = mode == "merge" ? 2 : 0,
-                RolesToReuse = 1,
-                ChannelsToCreate = 6,
-                ChannelsToUpdate = mode == "merge" ? 2 : 0,
-                ChannelsToReuse = 2,
-                EmojisToCreate = 3,
-                EmojisToReuse = 1,
-                TargetRolesToDelete = mode == "exact" ? 3 : 0,
-                TargetChannelsToDelete = mode == "exact" ? 5 : 0,
-                TargetEmojisToDelete = mode == "exact" ? 2 : 0,
-                RiskScore = mode == "exact" ? 72 : mode == "merge" ? 34 : 12,
-                Warnings =
-                [
-                    "PREVIEW ONLY — no Discord request will be sent.",
-                    "Connect a real accepted Token and reload servers before executing changes."
-                ]
-            };
+            var analysis = _discordProviders.CreateSimulatedAnalysis(source, target, SelectedMode());
+            _currentSourceSnapshot = analysis.SourceSnapshot;
+            _currentPlan = analysis.Plan;
 
             PlanText.Text = BuildPlanText08(_currentPlan) + Environment.NewLine + Environment.NewLine +
-                            "Preview reason: " + _discordPreviewReason;
+                            "Simulated provider reason: " + _discordPreviewReason;
             CloneButton.IsEnabled = true;
             ResumeCloneButton.IsEnabled = false;
-            AddLog("success", "Preview analysis generated. No Discord data was read or changed.");
+            AddLog("success", "Simulated analysis generated with roles, channels, emojis and verification steps. No Discord request was sent.");
         }
         catch (Exception ex)
         {
@@ -136,66 +111,81 @@ public partial class MainWindow
 
         if (_currentPlan is null || _currentSourceSnapshot is null)
         {
-            AddLog("warning", "Run the preview analysis before starting the simulation.");
+            var message = LocalizationService.CurrentCode == "pt-BR"
+                ? "Execute a análise simulada antes de iniciar."
+                : "Run the simulated analysis before starting.";
+            AddLog("warning", message);
+            PlanText.Text = message;
             return;
         }
 
         CloneButton.IsEnabled = false;
         AnalyzeEngineButton.IsEnabled = false;
+        CancelCloneButton.IsEnabled = true;
+        _operationCancellation08?.Dispose();
+        _operationCancellation08 = new CancellationTokenSource();
         try
         {
-            var steps = new[]
-            {
-                "Checking source and destination selection…",
-                "Simulating roles and permission mapping…",
-                "Simulating categories and channels…",
-                "Simulating emoji transfer…",
-                "Simulating post-operation verification…"
-            };
-
-            foreach (var step in steps)
-            {
-                AddLog("info", step);
-                await Task.Delay(180);
-            }
-
-            AddLog("success", "Preview simulation completed. Zero requests were sent to Discord.");
-            AddOperation($"Preview completed: {_currentPlan.SourceGuildName} → {_currentPlan.TargetGuildName}");
-            DashboardLastOperation.Text = $"Preview → {_currentPlan.TargetGuildName}";
+            await _discordProviders.RunSimulatedOperationAsync(MakeProgress(), _operationCancellation08.Token);
+            AddOperation($"Simulated operation completed: {_currentPlan.SourceGuildName} → {_currentPlan.TargetGuildName}");
+            DashboardLastOperation.Text = $"Simulation → {_currentPlan.TargetGuildName}";
             PlanText.Text += Environment.NewLine + Environment.NewLine +
-                             "SIMULATION COMPLETED — the interface and workflow ran successfully; no Discord content was changed.";
+                             "SIMULATION COMPLETED AND VERIFIED — every provider-independent step ran successfully; no Discord content was changed.";
+        }
+        catch (OperationCanceledException)
+        {
+            AddLog("warning", "The simulated operation was cancelled.");
+        }
+        catch (Exception ex)
+        {
+            AddLog("error", ex.Message);
+            PlanText.Text += Environment.NewLine + Environment.NewLine + ex.Message;
         }
         finally
         {
+            _operationCancellation08?.Dispose();
+            _operationCancellation08 = null;
             AnalyzeEngineButton.IsEnabled = true;
             CloneButton.IsEnabled = true;
+            CancelCloneButton.IsEnabled = false;
         }
     }
 
-    private static GuildSnapshot CreatePreviewSnapshot(GuildSummary source) => new()
+    private async void RestoreBackupCompatible_Click(object sender, RoutedEventArgs e)
     {
-        SourceGuildId = source.Id,
-        Name = source.Name,
-        Roles =
-        [
-            new RoleSnapshot { Id = source.Id, Name = "@everyone", Position = 0 },
-            new RoleSnapshot { Id = "preview-role-admin", Name = "Admin", Position = 3 },
-            new RoleSnapshot { Id = "preview-role-member", Name = "Member", Position = 2 },
-            new RoleSnapshot { Id = "preview-role-bot", Name = "GuildSync", Position = 1, Managed = true }
-        ],
-        Channels =
-        [
-            new ChannelSnapshot { Id = "preview-category", Name = "COMMUNITY", Type = 4, Position = 0 },
-            new ChannelSnapshot { Id = "preview-general", Name = "general", Type = 0, ParentId = "preview-category", Position = 1 },
-            new ChannelSnapshot { Id = "preview-news", Name = "announcements", Type = 5, ParentId = "preview-category", Position = 2 },
-            new ChannelSnapshot { Id = "preview-voice", Name = "Voice", Type = 2, ParentId = "preview-category", Position = 3 }
-        ],
-        Emojis =
-        [
-            new EmojiSnapshot { Id = "preview-emoji-1", Name = "guildsync" },
-            new EmojiSnapshot { Id = "preview-emoji-2", Name = "verified" }
-        ]
-    };
+        if (!_discordPreviewMode)
+        {
+            RestoreBackup08_Click(sender, e);
+            return;
+        }
+
+        if (BackupList.SelectedIndex < 0 || BackupList.SelectedIndex >= _backupPaths.Count)
+        {
+            BackupDetails.Text = "Select a backup before running the simulated restore.";
+            AddLog("warning", BackupDetails.Text);
+            return;
+        }
+
+        try
+        {
+            var envelope = await _backups.LoadAsync(_backupPaths[BackupList.SelectedIndex]);
+            var target = RequireEditableGuild(TargetGuildBox, "destination server");
+            RestoreBackupButton08.IsEnabled = false;
+            await _discordProviders.RunSimulatedOperationAsync(MakeProgress());
+            BackupDetails.Text = $"SIMULATED RESTORE VERIFIED\nBackup: {envelope.Name}\nDestination: {target.Name}\nNo Discord request was sent.";
+            AddOperation($"Simulated restore completed: {envelope.Name} → {target.Name}");
+            AddLog("success", "The complete restore flow was simulated and verified without changing Discord.");
+        }
+        catch (Exception ex)
+        {
+            BackupDetails.Text = "Simulated restore failed: " + ex.Message;
+            AddLog("error", ex.Message);
+        }
+        finally
+        {
+            RestoreBackupButton08.IsEnabled = true;
+        }
+    }
 
     private async void LinkDiscord_Click(object sender, RoutedEventArgs e)
     {
