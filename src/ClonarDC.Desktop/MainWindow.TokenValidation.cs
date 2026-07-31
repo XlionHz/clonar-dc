@@ -6,23 +6,36 @@ namespace ClonarDC;
 
 public partial class MainWindow
 {
+    private bool _discordPreviewMode;
+    private string _discordPreviewReason = string.Empty;
+
+    private static readonly List<GuildSummary> PreviewGuilds =
+    [
+        new("100000000000000001", "GuildSync Preview — Source", null),
+        new("100000000000000002", "GuildSync Preview — Destination", null),
+        new("100000000000000003", "GuildSync Preview — Community", null)
+    ];
+
     private void AcceptTokenWithoutValidation_Click(object sender, RoutedEventArgs e)
     {
         var rawValue = TokenBox.Password ?? string.Empty;
 
-        // The desktop intentionally does not classify, normalize or reject the value here.
-        // It is stored exactly as entered. Any later service response is shown as a
-        // connection result, never as a local "token type" decision.
+        // Store exactly what the user entered. Discord remains the authority for real API access.
         if (RememberTokenCheck.IsChecked == true)
             _secureToken.Save(rawValue);
 
         _discord.SetToken(rawValue);
+        _discordPreviewMode = false;
+        _discordPreviewReason = string.Empty;
+        _currentPlan = null;
+        _currentSourceSnapshot = null;
+        CloneButton.IsEnabled = false;
+        ResumeCloneButton.IsEnabled = false;
+
         AddLog("success", LocalizeTokenSaved());
-        MessageBox.Show(
-            LocalizeTokenSavedBody(),
-            "GuildSync",
-            MessageBoxButton.OK,
-            MessageBoxImage.Information);
+        PlanText.Text = LocalizationService.CurrentCode == "pt-BR"
+            ? "Token salvo. Clique em Carregar servidores. Se o Discord não aceitar a conexão, o GuildSync abrirá uma prévia segura sem enviar alterações."
+            : "Token saved. Select Load servers. If Discord does not accept the connection, GuildSync will open a safe preview without sending changes.";
     }
 
     private async void LoadServers_Click(object sender, RoutedEventArgs e)
@@ -32,7 +45,10 @@ public partial class MainWindow
         button.IsEnabled = false;
         var originalContent = button.Content;
         button.Content = LocalizationService.CurrentCode == "pt-BR" ? "Carregando…" : "Loading…";
+        _currentPlan = null;
+        _currentSourceSnapshot = null;
         CloneButton.IsEnabled = false;
+        ResumeCloneButton.IsEnabled = false;
 
         try
         {
@@ -41,55 +57,41 @@ public partial class MainWindow
             if (RememberTokenCheck.IsChecked == true)
                 _secureToken.Save(rawValue);
 
-            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(45));
+            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(25));
             AddLog("info", LocalizationService.CurrentCode == "pt-BR"
                 ? "Consultando os servidores acessíveis…"
                 : "Loading accessible servers…");
 
-            // There is no local format, size, prefix, bot/user or identity validation.
-            // The connected service is the only authority that can accept or reject a request.
             var guilds = await _discord.GetGuildsAsync(timeout.Token);
-            var sourceItems = guilds.ToList();
-            var targetItems = guilds.ToList();
-            SourceGuildBox.ItemsSource = sourceItems;
-            TargetGuildBox.ItemsSource = targetItems;
+            if (guilds.Count == 0)
+            {
+                ActivatePreviewServers(LocalizationService.CurrentCode == "pt-BR"
+                    ? "O Discord não retornou servidores acessíveis para este Token."
+                    : "Discord returned no accessible servers for this Token.");
+                return;
+            }
 
-            if (sourceItems.Count > 0)
-            {
-                SourceGuildBox.SelectedIndex = 0;
-                SourceGuildBox.Text = sourceItems[0].Name;
-            }
-            if (targetItems.Count > 1)
-            {
-                TargetGuildBox.SelectedIndex = 1;
-                TargetGuildBox.Text = targetItems[1].Name;
-            }
-            else if (targetItems.Count == 1)
-            {
-                TargetGuildBox.SelectedIndex = 0;
-                TargetGuildBox.Text = targetItems[0].Name;
-            }
+            _discordPreviewMode = false;
+            _discordPreviewReason = string.Empty;
+            ApplyServerItems(guilds);
 
             var success = LocalizationService.CurrentCode == "pt-BR"
-                ? $"{guilds.Count} servidor(es) carregado(s). Você também pode digitar qualquer ID manualmente."
-                : $"Loaded {guilds.Count} server(s). You can also type any server ID manually.";
+                ? $"{guilds.Count} servidor(es) real(is) carregado(s). Você também pode digitar qualquer ID manualmente."
+                : $"Loaded {guilds.Count} real server(s). You can also type any server ID manually.";
             AddLog("success", success);
+            PlanText.Text = LocalizationService.CurrentCode == "pt-BR"
+                ? "Servidores carregados. Escolha origem e destino e clique em Analisar."
+                : "Servers loaded. Select source and destination, then choose Analyze.";
         }
         catch (OperationCanceledException)
         {
-            var message = LocalizationService.CurrentCode == "pt-BR"
-                ? "O carregamento demorou mais que o esperado. O Token e os IDs digitados foram mantidos."
-                : "Loading took longer than expected. The Token and typed IDs were preserved.";
-            AddLog("warning", message);
-            MessageBox.Show(message, "GuildSync", MessageBoxButton.OK, MessageBoxImage.Warning);
+            ActivatePreviewServers(LocalizationService.CurrentCode == "pt-BR"
+                ? "A consulta ao Discord excedeu 25 segundos."
+                : "The Discord request exceeded 25 seconds.");
         }
         catch (Exception ex)
         {
-            var message = LocalizationService.CurrentCode == "pt-BR"
-                ? "O Token foi aceito pelo aplicativo, mas o serviço não conseguiu carregar os servidores agora. Você ainda pode digitar os IDs manualmente.\n\n" + ex.Message
-                : "The app accepted the Token, but the service could not load servers now. You can still type the IDs manually.\n\n" + ex.Message;
-            AddLog("warning", message);
-            MessageBox.Show(message, "GuildSync", MessageBoxButton.OK, MessageBoxImage.Warning);
+            ActivatePreviewServers(ex.Message);
         }
         finally
         {
@@ -98,13 +100,50 @@ public partial class MainWindow
         }
     }
 
+    private void ActivatePreviewServers(string reason)
+    {
+        _discordPreviewMode = true;
+        _discordPreviewReason = reason;
+        ApplyServerItems(PreviewGuilds);
+
+        var message = LocalizationService.CurrentCode == "pt-BR"
+            ? "Modo de pré-visualização ativado. O Token foi mantido e a interface continuará funcionando, mas nenhuma alteração será enviada ao Discord até uma conexão real ser aceita. Motivo: " + reason
+            : "Preview mode enabled. The Token was kept and the interface will continue working, but no changes will be sent to Discord until a real connection is accepted. Reason: " + reason;
+
+        AddLog("warning", message);
+        PlanText.Text = message + Environment.NewLine + Environment.NewLine +
+                        (LocalizationService.CurrentCode == "pt-BR"
+                            ? "Escolha os servidores de demonstração e clique em Analisar para simular todo o fluxo com segurança."
+                            : "Select the demonstration servers and choose Analyze to simulate the complete flow safely.");
+    }
+
+    private void ApplyServerItems(IEnumerable<GuildSummary> guilds)
+    {
+        var sourceItems = guilds.ToList();
+        var targetItems = guilds.ToList();
+        SourceGuildBox.ItemsSource = sourceItems;
+        TargetGuildBox.ItemsSource = targetItems;
+
+        if (sourceItems.Count > 0)
+        {
+            SourceGuildBox.SelectedIndex = 0;
+            SourceGuildBox.Text = sourceItems[0].Name;
+        }
+
+        if (targetItems.Count > 1)
+        {
+            TargetGuildBox.SelectedIndex = 1;
+            TargetGuildBox.Text = targetItems[1].Name;
+        }
+        else if (targetItems.Count == 1)
+        {
+            TargetGuildBox.SelectedIndex = 0;
+            TargetGuildBox.Text = targetItems[0].Name;
+        }
+    }
+
     private static string LocalizeTokenSaved() =>
         LocalizationService.CurrentCode == "pt-BR"
-            ? "Token aceito sem validação local."
-            : "Token accepted without local validation.";
-
-    private static string LocalizeTokenSavedBody() =>
-        LocalizationService.CurrentCode == "pt-BR"
-            ? "Pronto. O valor foi aceito exatamente como inserido. O aplicativo não verificou formato, tamanho, prefixo ou tipo."
-            : "Done. The value was accepted exactly as entered. The app did not check its format, length, prefix, or type.";
+            ? "Token aceito e salvo sem caixa de diálogo do Windows."
+            : "Token accepted and saved without a Windows dialog.";
 }
