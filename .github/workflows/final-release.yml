@@ -19,8 +19,8 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 80
     env:
-      APP_VERSION: '0.8.3.2'
-      API_VERSION: '0.8.3'
+      APP_VERSION: '0.8.3.3'
+      API_VERSION: '0.8.3.3'
 
     steps:
       - name: Checkout
@@ -36,9 +36,11 @@ jobs:
           $major = [int]((dotnet --version).Split('.')[0])
           if ($major -lt 10) { throw 'The runner does not provide .NET 10 or newer.' }
 
-      - name: Verify source contracts and secrets
+      - name: Verify source, UI and provider contracts
         shell: pwsh
-        run: ./scripts/Test-SourceContracts.ps1
+        run: |
+          ./scripts/Test-SourceContracts.ps1
+          ./scripts/Test-UiButtonContracts.ps1
 
       - name: Restore and build all GuildSync components
         shell: pwsh
@@ -47,23 +49,28 @@ jobs:
           dotnet restore ./src/ClonarDC.Desktop/ClonarDC.Desktop.csproj
           dotnet restore ./src/ClonarDC.Server/ClonarDC.Server.csproj
           dotnet restore ./src/GuildSync.Bot/GuildSync.Bot.csproj
+          dotnet restore ./src/GuildSync.DesktopFlowTests/GuildSync.DesktopFlowTests.csproj
           dotnet build ./src/ClonarDC.Desktop/ClonarDC.Desktop.csproj -c Release --no-restore
           dotnet build ./src/ClonarDC.Server/ClonarDC.Server.csproj -c Release --no-restore
           dotnet build ./src/GuildSync.Bot/GuildSync.Bot.csproj -c Release --no-restore
+          dotnet build ./src/GuildSync.DesktopFlowTests/GuildSync.DesktopFlowTests.csproj -c Release --no-restore
 
-      - name: Test engine reliability contracts
+      - name: Test engine and provider flow contracts
         shell: pwsh
-        run: ./scripts/Test-EngineReliability.ps1
+        run: |
+          ./scripts/Test-EngineReliability.ps1
+          New-Item -ItemType Directory -Force -Path out | Out-Null
+          dotnet run --project ./src/GuildSync.DesktopFlowTests/GuildSync.DesktopFlowTests.csproj -c Release --no-build -- "$PWD/out/provider-flow.json"
 
       - name: Publish self-contained desktop, API and bot
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          $fullVersion = "$env:APP_VERSION.$env:GITHUB_RUN_NUMBER"
+          $fullVersion = "0.8.3.$env:GITHUB_RUN_NUMBER"
           New-Item -ItemType Directory -Force -Path out/app,out/backend,out/bot,out/installer,out/portable,out/portable/backend | Out-Null
-          dotnet publish ./src/ClonarDC.Desktop/ClonarDC.Desktop.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=false -p:DebugType=None -p:DebugSymbols=false -p:Version=$env:APP_VERSION -p:FileVersion=$fullVersion -p:AssemblyVersion=0.8.3.2 -o out/app
-          dotnet publish ./src/ClonarDC.Server/ClonarDC.Server.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=false -p:DebugType=None -p:DebugSymbols=false -p:Version=$env:APP_VERSION -p:FileVersion=$fullVersion -p:AssemblyVersion=0.8.3.2 -o out/backend
-          dotnet publish ./src/GuildSync.Bot/GuildSync.Bot.csproj -c Release -r linux-x64 --self-contained false -p:DebugType=None -p:DebugSymbols=false -p:Version=$env:APP_VERSION -p:AssemblyVersion=0.8.3.2 -o out/bot
+          dotnet publish ./src/ClonarDC.Desktop/ClonarDC.Desktop.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=false -p:DebugType=None -p:DebugSymbols=false -p:Version=$env:APP_VERSION -p:FileVersion=$fullVersion -p:AssemblyVersion=0.8.3.3 -o out/app
+          dotnet publish ./src/ClonarDC.Server/ClonarDC.Server.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=false -p:DebugType=None -p:DebugSymbols=false -p:Version=$env:APP_VERSION -p:FileVersion=$fullVersion -p:AssemblyVersion=0.8.3.3 -o out/backend
+          dotnet publish ./src/GuildSync.Bot/GuildSync.Bot.csproj -c Release -r linux-x64 --self-contained false -p:DebugType=None -p:DebugSymbols=false -p:Version=$env:APP_VERSION -p:AssemblyVersion=0.8.3.3 -o out/bot
 
           if (-not (Test-Path out/app/ClonarDC.exe)) { throw 'GuildSync desktop executable was not generated.' }
           if (-not (Test-Path out/app/api-url.txt)) { throw 'api-url.txt was not published.' }
@@ -116,11 +123,6 @@ jobs:
           $setupHash = (Get-FileHash $setup -Algorithm SHA256).Hash.ToLowerInvariant()
           $portableHash = (Get-FileHash "out/GuildSync-$env:APP_VERSION-Portable-Windows.zip" -Algorithm SHA256).Hash.ToLowerInvariant()
           $sourceHash = (Get-FileHash "out/GuildSync-$env:APP_VERSION-Source.zip" -Algorithm SHA256).Hash.ToLowerInvariant()
-          @(
-            "$setupHash  GuildSync-Setup-$env:APP_VERSION.exe",
-            "$portableHash  GuildSync-$env:APP_VERSION-Portable-Windows.zip",
-            "$sourceHash  GuildSync-$env:APP_VERSION-Source.zip"
-          ) | Set-Content "out/GuildSync-$env:APP_VERSION-SHA256.txt"
           Copy-Item $setup "out/GuildSync-Setup-$env:APP_VERSION.exe" -Force
           "VERSION=$env:APP_VERSION`nSETUP_BYTES=$setupBytes`nSHA256=$setupHash`nCOMMIT=$env:GITHUB_SHA" | Set-Content 'out\installer\build-info.txt'
 
@@ -133,7 +135,7 @@ jobs:
             version = $env:APP_VERSION
             tag = "v$env:APP_VERSION"
             title = "GuildSync $env:APP_VERSION"
-            notes = 'Recovery release: account creation fallback, interactive login card, non-modal Token flow, safe any-Token preview and hardened self-contained packaging.'
+            notes = 'Provider separation release: exact arbitrary input persistence, official bot provider, complete simulated provider and runtime-switchable future policy.'
             setupFile = 'GuildSync-Setup.exe'
             sha256 = $setupHash
           } | ConvertTo-Json -Depth 4 | Set-Content (Join-Path $packageRoot 'manifest.json') -Encoding UTF8
@@ -146,6 +148,32 @@ jobs:
           $manifest = Get-Content 'out\verify-update-package\manifest.json' -Raw | ConvertFrom-Json
           $actual = (Get-FileHash 'out\verify-update-package\GuildSync-Setup.exe' -Algorithm SHA256).Hash.ToLowerInvariant()
           if ($manifest.version -ne $env:APP_VERSION -or $actual -ne $manifest.sha256) { throw 'GuildSync update package verification failed.' }
+
+          $updateHash = (Get-FileHash $package -Algorithm SHA256).Hash.ToLowerInvariant()
+          $releaseManifestPath = "out/GuildSync-$env:APP_VERSION-manifest.json"
+          [ordered]@{
+            formatVersion = 1
+            product = 'GuildSync'
+            version = $env:APP_VERSION
+            tag = "v$env:APP_VERSION"
+            sourceCommit = $env:GITHUB_SHA
+            officialProvider = 'Discord bot authorization only'
+            restrictiveTokenPolicyEnabled = $false
+            assets = [ordered]@{
+              installer = [ordered]@{ file = "GuildSync-Setup-$env:APP_VERSION.exe"; sha256 = $setupHash; bytes = $setupBytes }
+              portable = [ordered]@{ file = "GuildSync-$env:APP_VERSION-Portable-Windows.zip"; sha256 = $portableHash }
+              source = [ordered]@{ file = "GuildSync-$env:APP_VERSION-Source.zip"; sha256 = $sourceHash }
+              update = [ordered]@{ file = "GuildSync-$env:APP_VERSION.clonardc-update"; sha256 = $updateHash }
+            }
+          } | ConvertTo-Json -Depth 6 | Set-Content $releaseManifestPath -Encoding UTF8
+          $manifestHash = (Get-FileHash $releaseManifestPath -Algorithm SHA256).Hash.ToLowerInvariant()
+          @(
+            "$setupHash  GuildSync-Setup-$env:APP_VERSION.exe",
+            "$portableHash  GuildSync-$env:APP_VERSION-Portable-Windows.zip",
+            "$sourceHash  GuildSync-$env:APP_VERSION-Source.zip",
+            "$updateHash  GuildSync-$env:APP_VERSION.clonardc-update",
+            "$manifestHash  GuildSync-$env:APP_VERSION-manifest.json"
+          ) | Set-Content "out/GuildSync-$env:APP_VERSION-SHA256.txt"
 
       - name: Installer smoke test
         shell: pwsh
@@ -173,6 +201,18 @@ jobs:
           Stop-Process -Id $process.Id -Force
           'Installed GuildSync stayed alive for 12 seconds.' | Set-Content out/installed-launch-smoke.txt
 
+      - name: Uninstall smoke test
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $root = Join-Path $env:LOCALAPPDATA 'Programs\GuildSync'
+          $uninstaller = Join-Path $root 'unins000.exe'
+          if (-not (Test-Path $uninstaller)) { throw 'GuildSync uninstaller was not generated.' }
+          $uninstall = Start-Process -FilePath $uninstaller -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART' -Wait -PassThru
+          if ($uninstall.ExitCode -ne 0) { throw "Uninstaller returned $($uninstall.ExitCode)." }
+          if (Test-Path (Join-Path $root 'ClonarDC.exe')) { throw 'GuildSync executable remained after uninstall.' }
+          'GuildSync clean uninstall passed.' | Set-Content out/uninstaller-smoke.txt
+
       - name: Upload verified artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -183,11 +223,14 @@ jobs:
             out/GuildSync-${{ env.APP_VERSION }}-Source.zip
             out/GuildSync-${{ env.APP_VERSION }}-SHA256.txt
             out/GuildSync-${{ env.APP_VERSION }}.clonardc-update
+            out/GuildSync-${{ env.APP_VERSION }}-manifest.json
+            out/provider-flow.json
             out/installer/build-info.txt
             out/payload-sizes.txt
             out/desktop-smoke.txt
             out/installer-smoke.txt
             out/installed-launch-smoke.txt
+            out/uninstaller-smoke.txt
             out/bot/**
             render.yaml
             Dockerfile
@@ -204,22 +247,23 @@ jobs:
         run: |
           $ErrorActionPreference = 'Stop'
           $tag = "v$env:APP_VERSION"
-          $title = "GuildSync $env:APP_VERSION — Recovery Release"
+          $title = "GuildSync $env:APP_VERSION — Provider Separation Release"
           $notes = @'
-          Recovery release rebuilt from the last verified GitHub source.
+          GuildSync 0.8.3.3 separates the interface from Discord data access.
 
-          - Account creation falls back to a local preview account when the central service is unavailable.
-          - The login card reacts smoothly on hover instead of looking like a static image.
-          - Saving a Token and loading servers no longer open Windows message boxes or play the warning sound.
-          - Any entered Token can continue through an explicitly labelled safe preview flow; real Discord changes still require an accepted connection.
-          - Desktop and backend are self-contained; CI blocks suspiciously small installers and verifies both unpacked and installed launch.
+          - The Token field accepts, stores and reuses any text exactly as entered; restrictive type validation is disabled.
+          - The official provider uses only the supported Discord bot authorization scheme.
+          - When no authorized official connection exists, a complete simulated provider supplies servers, roles, channels, emojis, plans and execution progress.
+          - Future official-provider-only enforcement can be enabled at runtime through token-policy.json without rebuilding the UI.
+          - CI validates every XAML click handler, provider flows, clean installation, installed launch and clean uninstall.
           '@
           $assets = @(
             "out/GuildSync-Setup-$env:APP_VERSION.exe",
             "out/GuildSync-$env:APP_VERSION-Portable-Windows.zip",
             "out/GuildSync-$env:APP_VERSION-Source.zip",
             "out/GuildSync-$env:APP_VERSION-SHA256.txt",
-            "out/GuildSync-$env:APP_VERSION.clonardc-update"
+            "out/GuildSync-$env:APP_VERSION.clonardc-update",
+            "out/GuildSync-$env:APP_VERSION-manifest.json"
           )
 
           & gh release view $tag --json tagName *> $null
@@ -234,6 +278,12 @@ jobs:
 
           & gh release upload $tag @assets --clobber
           if ($LASTEXITCODE -ne 0) { throw "Could not upload assets to permanent release $tag." }
+
+          $published = (& gh release view $tag --json assets | ConvertFrom-Json).assets.name
+          foreach ($asset in $assets) {
+            $name = Split-Path $asset -Leaf
+            if ($published -notcontains $name) { throw "Permanent release is missing asset: $name" }
+          }
 
       - name: Record successful build
         if: success()
@@ -250,7 +300,7 @@ jobs:
             "Permanent release: https://github.com/$env:GITHUB_REPOSITORY/releases/tag/v$env:APP_VERSION",
             "Installer: $hashLine",
             '',
-            'Validation: source contracts, secret scan, desktop/API/bot compilation, engine contracts, API behavior, self-contained payload sizes, unpacked launch, installer, installed launch, update package and permanent GitHub Release assets verified.'
+            'Validation: source/UI/provider contracts, exact credential persistence, desktop/API/bot compilation, engine and API behavior, self-contained payload sizes, unpacked launch, clean install, installed launch, clean uninstall, update package, manifest and permanent GitHub Release assets verified.'
           ) | Set-Content build-status/latest.md -Encoding UTF8
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
