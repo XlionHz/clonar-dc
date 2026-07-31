@@ -17,6 +17,13 @@ public partial class MainWindow
         if (_compatibilityUiInitialized) return;
         _compatibilityUiInitialized = true;
 
+        // Replace the XAML handlers with compatibility-aware wrappers. Real tokens still
+        // execute the production engine; rejected/unavailable tokens stay in a safe simulation.
+        AnalyzeEngineButton.Click -= Analyze08_Click;
+        AnalyzeEngineButton.Click += AnalyzeCompatible_Click;
+        CloneButton.Click -= Clone08_Click;
+        CloneButton.Click += CloneCompatible_Click;
+
         LinkDiscordButton.Click += LinkDiscord_Click;
         DiscordLinkStatusText.Text = "Generate a one-time code with /link in the official GuildSync bot.";
         DiscordLinkStatusText.Foreground = TryFindResource("MutedBrush") as Brush ?? Brushes.Gray;
@@ -62,6 +69,133 @@ public partial class MainWindow
             ? 0
             : LocalizationService.CurrentCode.Equals("en-US", StringComparison.OrdinalIgnoreCase) ? 1 : -1;
     }
+
+    private void AnalyzeCompatible_Click(object sender, RoutedEventArgs e)
+    {
+        if (!_discordPreviewMode)
+        {
+            Analyze08_Click(sender, e);
+            return;
+        }
+
+        try
+        {
+            var source = RequireEditableGuild(SourceGuildBox, "source server");
+            var target = RequireEditableGuild(TargetGuildBox, "destination server");
+            if (source.Id == target.Id)
+                throw new InvalidOperationException("The source and destination servers cannot be the same.");
+
+            var mode = SelectedMode();
+            _currentSourceSnapshot = CreatePreviewSnapshot(source);
+            _currentPlan = new ClonePlan
+            {
+                SourceGuildId = source.Id,
+                SourceGuildName = source.Name,
+                TargetGuildId = target.Id,
+                TargetGuildName = target.Name,
+                Mode = mode,
+                RolesToCreate = 4,
+                RolesToUpdate = mode == "merge" ? 2 : 0,
+                RolesToReuse = 1,
+                ChannelsToCreate = 6,
+                ChannelsToUpdate = mode == "merge" ? 2 : 0,
+                ChannelsToReuse = 2,
+                EmojisToCreate = 3,
+                EmojisToReuse = 1,
+                TargetRolesToDelete = mode == "exact" ? 3 : 0,
+                TargetChannelsToDelete = mode == "exact" ? 5 : 0,
+                TargetEmojisToDelete = mode == "exact" ? 2 : 0,
+                RiskScore = mode == "exact" ? 72 : mode == "merge" ? 34 : 12,
+                Warnings =
+                [
+                    "PREVIEW ONLY — no Discord request will be sent.",
+                    "Connect a real accepted Token and reload servers before executing changes."
+                ]
+            };
+
+            PlanText.Text = BuildPlanText08(_currentPlan) + Environment.NewLine + Environment.NewLine +
+                            "Preview reason: " + _discordPreviewReason;
+            CloneButton.IsEnabled = true;
+            ResumeCloneButton.IsEnabled = false;
+            AddLog("success", "Preview analysis generated. No Discord data was read or changed.");
+        }
+        catch (Exception ex)
+        {
+            PlanText.Text = ex.Message;
+            AddLog("error", ex.Message);
+        }
+    }
+
+    private async void CloneCompatible_Click(object sender, RoutedEventArgs e)
+    {
+        if (!_discordPreviewMode)
+        {
+            Clone08_Click(sender, e);
+            return;
+        }
+
+        if (_currentPlan is null || _currentSourceSnapshot is null)
+        {
+            AddLog("warning", "Run the preview analysis before starting the simulation.");
+            return;
+        }
+
+        CloneButton.IsEnabled = false;
+        AnalyzeEngineButton.IsEnabled = false;
+        try
+        {
+            var steps = new[]
+            {
+                "Checking source and destination selection…",
+                "Simulating roles and permission mapping…",
+                "Simulating categories and channels…",
+                "Simulating emoji transfer…",
+                "Simulating post-operation verification…"
+            };
+
+            foreach (var step in steps)
+            {
+                AddLog("info", step);
+                await Task.Delay(180);
+            }
+
+            AddLog("success", "Preview simulation completed. Zero requests were sent to Discord.");
+            AddOperation($"Preview completed: {_currentPlan.SourceGuildName} → {_currentPlan.TargetGuildName}");
+            DashboardLastOperation.Text = $"Preview → {_currentPlan.TargetGuildName}";
+            PlanText.Text += Environment.NewLine + Environment.NewLine +
+                             "SIMULATION COMPLETED — the interface and workflow ran successfully; no Discord content was changed.";
+        }
+        finally
+        {
+            AnalyzeEngineButton.IsEnabled = true;
+            CloneButton.IsEnabled = true;
+        }
+    }
+
+    private static GuildSnapshot CreatePreviewSnapshot(GuildSummary source) => new()
+    {
+        SourceGuildId = source.Id,
+        Name = source.Name,
+        Roles =
+        [
+            new RoleSnapshot { Id = source.Id, Name = "@everyone", Position = 0 },
+            new RoleSnapshot { Id = "preview-role-admin", Name = "Admin", Position = 3 },
+            new RoleSnapshot { Id = "preview-role-member", Name = "Member", Position = 2 },
+            new RoleSnapshot { Id = "preview-role-bot", Name = "GuildSync", Position = 1, Managed = true }
+        ],
+        Channels =
+        [
+            new ChannelSnapshot { Id = "preview-category", Name = "COMMUNITY", Type = 4, Position = 0 },
+            new ChannelSnapshot { Id = "preview-general", Name = "general", Type = 0, ParentId = "preview-category", Position = 1 },
+            new ChannelSnapshot { Id = "preview-news", Name = "announcements", Type = 5, ParentId = "preview-category", Position = 2 },
+            new ChannelSnapshot { Id = "preview-voice", Name = "Voice", Type = 2, ParentId = "preview-category", Position = 3 }
+        ],
+        Emojis =
+        [
+            new EmojiSnapshot { Id = "preview-emoji-1", Name = "guildsync" },
+            new EmojiSnapshot { Id = "preview-emoji-2", Name = "verified" }
+        ]
+    };
 
     private async void LinkDiscord_Click(object sender, RoutedEventArgs e)
     {
@@ -109,12 +243,10 @@ public partial class MainWindow
         if (string.IsNullOrWhiteSpace(code) || string.Equals(code, LocalizationService.CurrentCode, StringComparison.OrdinalIgnoreCase)) return;
 
         LocalizationService.Save(code);
-        MessageBox.Show(
-            code.Equals("pt-BR", StringComparison.OrdinalIgnoreCase)
-                ? "Idioma salvo. Reabra a GuildSync para aplicar todos os textos."
-                : "Language saved. Reopen GuildSync to apply every label.",
-            "GuildSync",
-            MessageBoxButton.OK,
-            MessageBoxImage.Information);
+        var message = code.Equals("pt-BR", StringComparison.OrdinalIgnoreCase)
+            ? "Idioma salvo. Reabra o GuildSync para aplicar todos os textos."
+            : "Language saved. Reopen GuildSync to apply every label.";
+        AddLog("success", message);
+        DiscordLinkStatusText.Text = message;
     }
 }
