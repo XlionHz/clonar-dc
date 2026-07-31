@@ -212,7 +212,6 @@ public partial class LoginWindow : Window
     private void SetBusy(bool busy, string? text = null)
     {
         LoginButton.IsEnabled = !busy;
-        RegisterButton.IsEnabled = !busy;
         if (text is not null) StatusText.Text = text;
     }
 }
