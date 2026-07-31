@@ -6,10 +6,13 @@ namespace ClonarDC;
 
 public partial class RegisterWindow : Window
 {
+    private const string LocalPreviewUrl = "http://127.0.0.1:8787";
     private readonly AuthClient _auth;
     private bool _submitting;
 
     public string RegisteredEmail { get; private set; } = "";
+    public bool UsedLocalFallback { get; private set; }
+    public string LocalFallbackReason { get; private set; } = "";
 
     public RegisterWindow(AuthClient auth)
     {
@@ -59,21 +62,16 @@ public partial class RegisterWindow : Window
 
         try
         {
-            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(25));
-            await _auth.RegisterAsync(name, email, password, timeout.Token);
+            await RegisterWithRecoveryAsync(name, email, password);
 
             RegisteredEmail = email;
             FormPanel.Visibility = Visibility.Collapsed;
-            SuccessTitleText.Text = Copy("success-title");
-            SuccessBodyText.Text = Copy("success-body");
+            SuccessTitleText.Text = UsedLocalFallback ? Copy("local-success-title") : Copy("success-title");
+            SuccessBodyText.Text = UsedLocalFallback ? Copy("local-success-body") : Copy("success-body");
             SuccessPanel.Visibility = Visibility.Visible;
 
-            await Task.Delay(1800);
+            await Task.Delay(900);
             DialogResult = true;
-        }
-        catch (OperationCanceledException)
-        {
-            ShowError(Copy("timeout"));
         }
         catch (Exception ex)
         {
@@ -89,6 +87,47 @@ public partial class RegisterWindow : Window
                 BusyBar.Visibility = Visibility.Collapsed;
             }
         }
+    }
+
+    private async Task RegisterWithRecoveryAsync(string name, string email, string password)
+    {
+        try
+        {
+            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+            await _auth.RegisterAsync(name, email, password, timeout.Token);
+            return;
+        }
+        catch (Exception primaryFailure) when (_auth.UsesCentralBackend && CanUseLocalFallback(primaryFailure))
+        {
+            LocalFallbackReason = primaryFailure.Message;
+        }
+
+        using var localAuth = new AuthClient(LocalPreviewUrl);
+        using var localTimeout = new CancellationTokenSource(TimeSpan.FromSeconds(18));
+        await localAuth.RegisterAsync(name, email, password, localTimeout.Token);
+        UsedLocalFallback = true;
+    }
+
+    private static bool CanUseLocalFallback(Exception exception)
+    {
+        if (exception is OperationCanceledException or TimeoutException or HttpRequestException)
+            return true;
+
+        var text = exception.Message;
+        if (text.Contains("already exists", StringComparison.OrdinalIgnoreCase) ||
+            text.Contains("Já existe", StringComparison.OrdinalIgnoreCase) ||
+            text.Contains("valid", StringComparison.OrdinalIgnoreCase) ||
+            text.Contains("senha", StringComparison.OrdinalIgnoreCase) ||
+            text.Contains("password", StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        return text.Contains("HTTP 5", StringComparison.OrdinalIgnoreCase) ||
+               text.Contains("serviço", StringComparison.OrdinalIgnoreCase) ||
+               text.Contains("service", StringComparison.OrdinalIgnoreCase) ||
+               text.Contains("connect", StringComparison.OrdinalIgnoreCase) ||
+               text.Contains("network", StringComparison.OrdinalIgnoreCase) ||
+               text.Contains("host", StringComparison.OrdinalIgnoreCase) ||
+               text.Contains("tempor", StringComparison.OrdinalIgnoreCase);
     }
 
     private void ApplyRegistrationCopy()
@@ -117,15 +156,11 @@ public partial class RegisterWindow : Window
     {
         if (raw.Contains("Já existe uma conta", StringComparison.OrdinalIgnoreCase) ||
             raw.Contains("already exists", StringComparison.OrdinalIgnoreCase))
-        {
             return Copy("duplicate");
-        }
 
         if (raw.Contains("serviço de contas", StringComparison.OrdinalIgnoreCase) ||
             raw.Contains("account service", StringComparison.OrdinalIgnoreCase))
-        {
             return Copy("service");
-        }
 
         return Copy("generic") + Environment.NewLine + raw;
     }
@@ -138,46 +173,51 @@ public partial class RegisterWindow : Window
             ("pt-BR", "valid-email") => "Informe um endereço de e-mail válido.",
             ("pt-BR", "creating") => "Criando conta…",
             ("pt-BR", "success-title") => "Conta GuildSync criada!",
-            ("pt-BR", "success-body") => "Sua conta foi criada. Entre no aplicativo para escolher uma licença ou conecte o bot oficial do GuildSync ao seu Discord.",
-            ("pt-BR", "timeout") => "A solicitação demorou mais que o esperado. Verifique sua conexão e tente novamente.",
+            ("pt-BR", "success-body") => "Sua conta foi criada no serviço central. Entre para escolher ou ativar uma licença.",
+            ("pt-BR", "local-success-title") => "Conta de pré-visualização criada!",
+            ("pt-BR", "local-success-body") => "O serviço central estava indisponível, então o GuildSync criou uma conta local segura para você testar o aplicativo agora. Nenhuma alteração real será enviada ao Discord sem uma conexão aceita.",
             ("pt-BR", "duplicate") => "Já existe uma conta cadastrada com este e-mail.",
-            ("pt-BR", "service") => "Não foi possível acessar o serviço de contas do GuildSync. Verifique sua conexão e tente novamente.",
+            ("pt-BR", "service") => "Não foi possível acessar o serviço de contas do GuildSync nem iniciar o modo local. Reinstale a versão completa e tente novamente.",
             ("pt-BR", "generic") => "Não foi possível criar sua conta GuildSync. Confira os dados e tente novamente.",
 
             ("es-ES", "valid-email") => "Introduce una dirección de correo válida.",
             ("es-ES", "creating") => "Creando cuenta…",
             ("es-ES", "success-title") => "¡Cuenta de GuildSync creada!",
-            ("es-ES", "success-body") => "Tu cuenta fue creada. Inicia sesión para elegir una licencia o conecta el bot oficial de GuildSync a Discord.",
-            ("es-ES", "timeout") => "La solicitud tardó demasiado. Comprueba tu conexión e inténtalo de nuevo.",
+            ("es-ES", "success-body") => "Tu cuenta fue creada en el servicio central. Inicia sesión para elegir o activar una licencia.",
+            ("es-ES", "local-success-title") => "¡Cuenta de vista previa creada!",
+            ("es-ES", "local-success-body") => "El servicio central no estaba disponible, así que GuildSync creó una cuenta local segura para probar la aplicación ahora.",
             ("es-ES", "duplicate") => "Ya existe una cuenta registrada con este correo.",
-            ("es-ES", "service") => "No se pudo acceder al servicio de cuentas de GuildSync. Comprueba tu conexión e inténtalo de nuevo.",
+            ("es-ES", "service") => "No se pudo acceder al servicio de cuentas ni iniciar el modo local.",
             ("es-ES", "generic") => "No pudimos crear tu cuenta de GuildSync. Comprueba los datos e inténtalo de nuevo.",
 
             ("fr-FR", "valid-email") => "Saisissez une adresse e-mail valide.",
             ("fr-FR", "creating") => "Création du compte…",
             ("fr-FR", "success-title") => "Compte GuildSync créé !",
-            ("fr-FR", "success-body") => "Votre compte est créé. Connectez-vous pour choisir une licence ou reliez le bot officiel GuildSync à Discord.",
-            ("fr-FR", "timeout") => "La demande a pris trop de temps. Vérifiez votre connexion et réessayez.",
+            ("fr-FR", "success-body") => "Votre compte a été créé sur le service central. Connectez-vous pour choisir ou activer une licence.",
+            ("fr-FR", "local-success-title") => "Compte d’aperçu créé !",
+            ("fr-FR", "local-success-body") => "Le service central était indisponible. GuildSync a créé un compte local sécurisé pour tester l’application maintenant.",
             ("fr-FR", "duplicate") => "Un compte existe déjà avec cette adresse e-mail.",
-            ("fr-FR", "service") => "Le service de comptes GuildSync est inaccessible. Vérifiez votre connexion et réessayez.",
+            ("fr-FR", "service") => "Le service de comptes et le mode local sont inaccessibles.",
             ("fr-FR", "generic") => "Impossible de créer votre compte GuildSync. Vérifiez les informations et réessayez.",
 
             ("de-DE", "valid-email") => "Gib eine gültige E-Mail-Adresse ein.",
             ("de-DE", "creating") => "Konto wird erstellt…",
             ("de-DE", "success-title") => "GuildSync-Konto erstellt!",
-            ("de-DE", "success-body") => "Dein Konto wurde erstellt. Melde dich an, um eine Lizenz auszuwählen oder den offiziellen GuildSync-Bot mit Discord zu verbinden.",
-            ("de-DE", "timeout") => "Die Anfrage hat zu lange gedauert. Prüfe deine Verbindung und versuche es erneut.",
+            ("de-DE", "success-body") => "Dein Konto wurde im zentralen Dienst erstellt. Melde dich an, um eine Lizenz auszuwählen oder zu aktivieren.",
+            ("de-DE", "local-success-title") => "Vorschaukonto erstellt!",
+            ("de-DE", "local-success-body") => "Der zentrale Dienst war nicht verfügbar. GuildSync hat ein sicheres lokales Konto zum sofortigen Testen erstellt.",
             ("de-DE", "duplicate") => "Mit dieser E-Mail-Adresse existiert bereits ein Konto.",
-            ("de-DE", "service") => "Der GuildSync-Kontodienst ist nicht erreichbar. Prüfe deine Verbindung und versuche es erneut.",
+            ("de-DE", "service") => "Kontodienst und lokaler Modus konnten nicht gestartet werden.",
             ("de-DE", "generic") => "Das GuildSync-Konto konnte nicht erstellt werden. Prüfe die Angaben und versuche es erneut.",
 
             (_, "valid-email") => "Enter a valid email address.",
             (_, "creating") => "Creating account…",
             (_, "success-title") => "GuildSync account created!",
-            (_, "success-body") => "Your account was created. Sign in to choose a license or connect the official GuildSync bot to Discord.",
-            (_, "timeout") => "The request took too long. Check your connection and try again.",
+            (_, "success-body") => "Your account was created on the central service. Sign in to select or activate a license.",
+            (_, "local-success-title") => "Preview account created!",
+            (_, "local-success-body") => "The central service was unavailable, so GuildSync created a safe local account for testing the app now. No real Discord changes will be sent without an accepted connection.",
             (_, "duplicate") => "An account already exists with this email.",
-            (_, "service") => "The GuildSync account service could not be reached. Check your connection and try again.",
+            (_, "service") => "The GuildSync account service and local mode could not be reached.",
             _ => "We could not create your GuildSync account. Check the information and try again."
         };
     }
