@@ -6,12 +6,18 @@ on:
       - agent/guildsync-0.8.3.3-provider-separation
     paths:
       - .github/workflows/apply-0.8.3.3-bootstrap.yml
+  pull_request:
+    branches:
+      - main
+    types: [opened, synchronize, reopened]
 
 permissions:
   contents: write
+  pull-requests: read
 
 jobs:
   apply:
+    if: github.event_name == 'push' || github.head_ref == 'agent/guildsync-0.8.3.3-provider-separation'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
