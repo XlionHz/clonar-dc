@@ -1,5 +1,5 @@
 #define MyAppName "GuildSync"
-#define MyAppVersion "0.8.2"
+#define MyAppVersion "0.8.3.2"
 #define MyAppPublisher "GuildSync"
 #define MyAppExeName "ClonarDC.exe"
 
@@ -9,7 +9,7 @@ AppName={#MyAppName}
 AppVerName={#MyAppName} {#MyAppVersion}
 AppVersion={#MyAppVersion}
 AppPublisher={#MyAppPublisher}
-VersionInfoVersion=0.8.2.0
+VersionInfoVersion=0.8.3.2
 DefaultDirName={localappdata}\Programs\GuildSync
 DefaultGroupName=GuildSync
 DisableProgramGroupPage=yes
@@ -61,7 +61,6 @@ Source: "..\out\app\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs cr
 Source: "..\out\backend\*"; DestDir: "{app}\backend"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Registry]
-Root: HKCU; Subkey: "Software\GuildSync"; ValueType: string; ValueName: "Language"; ValueData: "{code:GetAppCulture}"
 Root: HKCU; Subkey: "Software\GuildSync"; ValueType: string; ValueName: "Language"; ValueData: "{code:GetAppCulture}"
 Root: HKCU; Subkey: "Software\GuildSync"; ValueType: string; ValueName: "ApiUrl"; ValueData: "https://clonar-dc-api.onrender.com"
 
