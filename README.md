@@ -2,7 +2,11 @@
 
 GuildSync is a Windows desktop application for backing up, cloning and synchronizing Discord server structures through the official Discord Bot API.
 
-> Current development release: **0.8.2 alpha**
+> Current verified release: **0.8.3.3**
+
+## 0.8.3.3 provider model
+
+The Token field is intentionally permissive in this release: it accepts, stores and reuses any text exactly as entered. Discord access is isolated behind an official bot provider, while a complete simulated provider keeps the whole interface testable when no authorized connection exists. The future official-provider-only policy is runtime-configurable and ships disabled. See `docs/provider-architecture.md`.
 
 ## What it does
 

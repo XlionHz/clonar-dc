@@ -10,6 +10,7 @@ public partial class MainWindow : Window
 {
     private readonly AppSession _session;
     private readonly DiscordService _discord = new();
+    private readonly DiscordProviderCoordinator _discordProviders;
     private readonly BackupService _backups = new();
     private readonly SecureTokenStore _secureToken = new();
     private readonly AuthClient _auth = new();
@@ -24,18 +25,19 @@ public partial class MainWindow : Window
     public MainWindow(AppSession session)
     {
         _session = session;
+        _discordProviders = new DiscordProviderCoordinator(_discord);
         InitializeComponent();
         LocalizationService.Apply(this);
         UserNameText.Text = session.DisplayName;
         UserEmailText.Text = session.Email;
-        VersionText.Text = "v0.8.2 alpha";
+        VersionText.Text = "v0.8.3.3";
         AdminNav.Visibility = session.IsAdmin ? Visibility.Visible : Visibility.Collapsed;
         LogList.ItemsSource = _logs;
         OperationsList.ItemsSource = _operations;
         BackupList.ItemsSource = _backupItems;
         BackupPathText.Text = _backups.BackupDirectory;
         var saved = _secureToken.Load();
-        if (!string.IsNullOrWhiteSpace(saved)) TokenBox.Password = saved;
+        if (saved is not null) TokenBox.Password = saved;
         RefreshDashboard();
         RefreshBackups();
         UpdateLicenseText();
@@ -63,21 +65,20 @@ public partial class MainWindow : Window
         try
         {
             SetDiscordToken();
-            AddLog("info", "Validating Token…");
-            var bot = await _discord.ValidateTokenAsync();
-            AddLog("success", $"Token is valid. Bot: {bot}");
-            if (RememberTokenCheck.IsChecked == true) _secureToken.Save(TokenBox.Password);
-            var guilds = await _discord.GetGuildsAsync();
-            SourceGuildBox.ItemsSource = guilds;
-            TargetGuildBox.ItemsSource = guilds.ToList();
-            if (guilds.Count > 0) SourceGuildBox.SelectedIndex = 0;
-            if (guilds.Count > 1) TargetGuildBox.SelectedIndex = 1;
-            AddLog("info", $"The bot can access {guilds.Count} server(s).");
+            AddLog("info", "Checking the configured data provider…");
+            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(25));
+            var result = await _discordProviders.LoadGuildsAsync(timeout.Token);
+            ApplyServerItems(result.Guilds);
+            _discordPreviewMode = result.IsSimulated;
+            _discordPreviewReason = result.FallbackReason ?? string.Empty;
+            AddLog(result.IsSimulated ? "warning" : "success", result.IsSimulated
+                ? "The simulated provider is active: " + result.FallbackReason
+                : $"The official provider loaded {result.Guilds.Count} server(s)." );
         }
         catch (Exception ex)
         {
             AddLog("error", ex.Message);
-            MessageBox.Show(ex.Message, "GuildSync", MessageBoxButton.OK, MessageBoxImage.Warning);
+            PlanText.Text = ex.Message;
         }
     }
 
@@ -184,15 +185,23 @@ public partial class MainWindow : Window
 
     private async void VerifyBackup_Click(object sender, RoutedEventArgs e)
     {
-        if (BackupList.SelectedIndex < 0 || BackupList.SelectedIndex >= _backupPaths.Count) return;
+        if (BackupList.SelectedIndex < 0 || BackupList.SelectedIndex >= _backupPaths.Count)
+        {
+            BackupDetails.Text = "Select a backup before verifying it.";
+            AddLog("warning", "Backup verification requires a selected backup.");
+            return;
+        }
+
         try
         {
             var env = await _backups.LoadAsync(_backupPaths[BackupList.SelectedIndex]);
-            MessageBox.Show($"Backup '{env.Name}' is valid.", "GuildSync", MessageBoxButton.OK, MessageBoxImage.Information);
+            BackupDetails.Text = $"{env.Name}\nServer: {env.Snapshot.Name}\nIntegrity: valid\nSHA-256 and payload limits verified.";
+            AddLog("success", $"Backup '{env.Name}' passed integrity validation.");
         }
         catch (Exception ex)
         {
-            MessageBox.Show(ex.Message, "Invalid backup", MessageBoxButton.OK, MessageBoxImage.Error);
+            BackupDetails.Text = "Invalid backup: " + ex.Message;
+            AddLog("error", "Backup validation failed: " + ex.Message);
         }
     }
 
@@ -221,8 +230,17 @@ public partial class MainWindow : Window
     private void ClearToken_Click(object sender, RoutedEventArgs e)
     {
         _secureToken.Clear();
-        TokenBox.Password = "";
-        MessageBox.Show("The saved Token was removed from this computer.");
+        TokenBox.Password = string.Empty;
+        _discordProviders.SetCredential(string.Empty);
+        _discordPreviewMode = true;
+        _discordPreviewReason = "The saved value was explicitly removed.";
+        ProviderStatusText.Text = LocalizationService.CurrentCode == "pt-BR"
+            ? "Provedor simulado • valor salvo removido deste computador"
+            : "Simulated provider • saved value removed from this computer";
+        PlanText.Text = LocalizationService.CurrentCode == "pt-BR"
+            ? "O valor salvo foi removido. Você pode inserir qualquer texto novamente."
+            : "The saved value was removed. You can enter any text again.";
+        AddLog("success", PlanText.Text);
     }
 
     private async void LoadAdmin_Click(object sender, RoutedEventArgs e) => await LoadAdminUsersAsync();
@@ -268,9 +286,9 @@ public partial class MainWindow : Window
 
     private void SetDiscordToken()
     {
-        if (string.IsNullOrWhiteSpace(TokenBox.Password)) throw new InvalidOperationException("Enter the Token.");
-        _discord.SetToken(TokenBox.Password);
-        if (RememberTokenCheck.IsChecked == true) _secureToken.Save(TokenBox.Password);
+        var rawValue = TokenBox.Password ?? string.Empty;
+        _discordProviders.SetCredential(rawValue);
+        if (RememberTokenCheck.IsChecked == true) _secureToken.Save(rawValue);
     }
 
     private static GuildSummary RequireGuild(ComboBox box, string name) =>

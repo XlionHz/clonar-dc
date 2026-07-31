@@ -21,8 +21,8 @@ public partial class MainWindow
             "http://127.0.0.1:8787",
             StringComparison.OrdinalIgnoreCase);
         VersionText.Text = localDeveloper
-            ? $"v{displayVersion} recovery  •  LOCAL PREVIEW"
-            : $"v{displayVersion} recovery";
+            ? $"v{displayVersion} provider build  •  LOCAL PREVIEW"
+            : $"v{displayVersion} provider build";
 
         Pages.Template = (ControlTemplate)XamlReader.Parse(
             """

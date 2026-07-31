@@ -17,8 +17,8 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 55
     env:
-      APP_VERSION: '0.8.3.2'
-      API_VERSION: '0.8.3'
+      APP_VERSION: '0.8.3.3'
+      API_VERSION: '0.8.3.3'
 
     steps:
       - name: Checkout
@@ -36,9 +36,11 @@ jobs:
         shell: pwsh
         run: New-Item -ItemType Directory -Force -Path out/diagnostics,out/desktop-test,out/desktop-launch | Out-Null
 
-      - name: Verify source contracts and secrets
+      - name: Verify source, UI and provider contracts
         shell: pwsh
-        run: ./scripts/Test-SourceContracts.ps1
+        run: |
+          ./scripts/Test-SourceContracts.ps1
+          ./scripts/Test-UiButtonContracts.ps1
 
       - name: Restore projects
         shell: pwsh
@@ -47,6 +49,7 @@ jobs:
           dotnet restore ./src/ClonarDC.Desktop/ClonarDC.Desktop.csproj *>&1 | Tee-Object out/diagnostics/restore-desktop.log
           dotnet restore ./src/ClonarDC.Server/ClonarDC.Server.csproj *>&1 | Tee-Object out/diagnostics/restore-api.log
           dotnet restore ./src/GuildSync.Bot/GuildSync.Bot.csproj *>&1 | Tee-Object out/diagnostics/restore-bot.log
+          dotnet restore ./src/GuildSync.DesktopFlowTests/GuildSync.DesktopFlowTests.csproj *>&1 | Tee-Object out/diagnostics/restore-provider-tests.log
 
       - name: Build projects
         shell: pwsh
@@ -61,6 +64,9 @@ jobs:
 
             dotnet build ./src/GuildSync.Bot/GuildSync.Bot.csproj -c Release --no-restore *>&1 | Tee-Object out/diagnostics/build-bot.log
             if ($LASTEXITCODE -ne 0) { throw 'Bot build failed.' }
+
+            dotnet build ./src/GuildSync.DesktopFlowTests/GuildSync.DesktopFlowTests.csproj -c Release --no-restore *>&1 | Tee-Object out/diagnostics/build-provider-tests.log
+            if ($LASTEXITCODE -ne 0) { throw 'Provider flow tests build failed.' }
 
             dotnet publish ./src/ClonarDC.Desktop/ClonarDC.Desktop.csproj -c Release --no-restore --self-contained false -p:DebugType=None -p:DebugSymbols=false -o out/desktop-test *>&1 | Tee-Object out/diagnostics/publish-desktop-test.log
             if ($LASTEXITCODE -ne 0) { throw 'Desktop test publish failed.' }
@@ -94,6 +100,13 @@ jobs:
             $_ | Format-List * -Force | Out-String | Tee-Object -FilePath out/diagnostics/engine-reliability.log -Append
             throw
           }
+
+      - name: Run desktop provider flow tests
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          dotnet run --project ./src/GuildSync.DesktopFlowTests/GuildSync.DesktopFlowTests.csproj -c Release --no-build -- "$PWD/out/diagnostics/provider-flow.json"
+          if (-not (Test-Path out/diagnostics/provider-flow.json)) { throw 'Provider flow report was not generated.' }
 
       - name: Launch self-contained desktop smoke test
         shell: pwsh

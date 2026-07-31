@@ -1,3 +1,13 @@
+## 0.8.3.3 — Provider Separation and Complete Simulation
+
+- Preserved arbitrary Token-field input exactly, including DPAPI persistence without format/type classification.
+- Replaced the unused gateway credential probe with an official bot-only transport adapter.
+- Added `DiscordProviderCoordinator`, `SimulatedDiscordDataProvider` and runtime-switchable `RuntimeTokenPolicy`.
+- Added consistent simulated servers, roles, channels, emojis, analysis, execution, cancellation and restore flows.
+- Added an inline provider-status banner and removed native dialogs from Token, server loading, simulation, backup verification and saved-value clearing.
+- Added UI-handler contracts, provider-flow executable tests, standalone manifest, complete asset hashes and clean uninstall validation.
+- Removed temporary tree-test files and failed-build logs from source delivery.
+
 ## 0.8.2 — Login Experience and Input Fixes
 
 - Rebuilt the premium login screen with a real opening animation.

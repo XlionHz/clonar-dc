@@ -7,20 +7,26 @@ internal static class TokenAuthorization
 {
     public static AuthenticationHeaderValue Create(string? rawValue)
     {
-        var transportValue = (rawValue ?? string.Empty).Trim();
-        if (AuthenticationHeaderValue.TryParse(transportValue, out var parsed) &&
+        var exactValue = rawValue ?? string.Empty;
+
+        // The interface stores and reuses the exact value. This adapter only prepares a
+        // transport-safe value for the official bot provider and never emits a user-token
+        // authorization scheme or attempts to classify the account type.
+        if (AuthenticationHeaderValue.TryParse(exactValue, out var parsed) &&
+            parsed.Scheme.Equals("Bot", StringComparison.OrdinalIgnoreCase) &&
+            !string.IsNullOrWhiteSpace(parsed.Parameter))
+            return new AuthenticationHeaderValue("Bot", parsed.Parameter);
+
+        if (AuthenticationHeaderValue.TryParse($"Bot {exactValue}", out parsed) &&
+            parsed.Scheme.Equals("Bot", StringComparison.OrdinalIgnoreCase) &&
             !string.IsNullOrWhiteSpace(parsed.Parameter))
             return parsed;
 
-        if (AuthenticationHeaderValue.TryParse($"Bot {transportValue}", out parsed))
-            return parsed;
-
-        // Preserve valid Discord tokens exactly. Only arbitrary text that cannot legally be
-        // transported as an HTTP Authorization value is encoded for the safe preview request.
-        var previewSafeValue = Convert.ToBase64String(Encoding.UTF8.GetBytes(transportValue));
-        if (string.IsNullOrWhiteSpace(previewSafeValue))
-            previewSafeValue = "preview-token";
-
-        return new AuthenticationHeaderValue("Bot", previewSafeValue);
+        // Arbitrary text may contain characters that HTTP headers cannot transport. Encoding
+        // is not validation or mutation of the saved value; it only guarantees a safe failed
+        // official request before the coordinator falls back to the simulated provider.
+        var transportValue = Convert.ToBase64String(Encoding.UTF8.GetBytes(exactValue));
+        if (string.IsNullOrEmpty(transportValue)) transportValue = "AA==";
+        return new AuthenticationHeaderValue("Bot", transportValue);
     }
 }

@@ -6,7 +6,7 @@ using System.Text;
 using System.Text.Json;
 
 const string ProductName = "GuildSync API";
-const string DefaultVersion = "0.8.2";
+const string DefaultVersion = "0.8.3.3";
 
 var builder = WebApplication.CreateBuilder(args);
 var environmentName = Environment.GetEnvironmentVariable("GUILDSYNC_ENV")
@@ -95,7 +95,7 @@ if (isProduction)
 var assemblyVersion = Assembly.GetExecutingAssembly().GetName().Version;
 var version = assemblyVersion is null
     ? DefaultVersion
-    : $"{assemblyVersion.Major}.{assemblyVersion.Minor}.{Math.Max(assemblyVersion.Build, 0)}";
+    : $"{assemblyVersion.Major}.{assemblyVersion.Minor}.{Math.Max(assemblyVersion.Build, 0)}.{Math.Max(assemblyVersion.Revision, 0)}";
 
 app.MapGet("/", () => Results.Text("GuildSync API online", "text/plain; charset=utf-8"));
 app.MapGet("/status", () => Results.Ok(new

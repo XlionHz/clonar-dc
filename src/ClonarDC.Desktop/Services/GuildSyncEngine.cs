@@ -24,7 +24,7 @@ public sealed class GuildSyncEngine : IDisposable
             BaseAddress = new Uri(ApiBase),
             Timeout = TimeSpan.FromSeconds(60)
         };
-        _http.DefaultRequestHeaders.UserAgent.ParseAdd("GuildSync-Desktop/0.8.2");
+        _http.DefaultRequestHeaders.UserAgent.ParseAdd("GuildSync-Desktop/0.8.3.3");
         _http.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
     }
 

@@ -7,6 +7,7 @@ namespace ClonarDC.Services;
 
 public sealed class SecureTokenStore
 {
+    private const string StorageMarker = "GUILDSYNC_TOKEN_V2\0";
     private readonly string _path;
     private readonly string _description;
 
@@ -24,14 +25,10 @@ public sealed class SecureTokenStore
 
     public void Save(string token)
     {
-        if (string.IsNullOrWhiteSpace(token))
-        {
-            Clear();
-            return;
-        }
-
+        // Save the exact value, including empty strings, whitespace, prefixes and symbols.
+        // Clearing is an explicit user action handled by Clear().
         Directory.CreateDirectory(Path.GetDirectoryName(_path)!);
-        var input = Encoding.UTF8.GetBytes(token);
+        var input = Encoding.UTF8.GetBytes(StorageMarker + (token ?? string.Empty));
         try
         {
             var protectedBytes = Protect(input, _description);
@@ -50,7 +47,13 @@ public sealed class SecureTokenStore
         {
             var protectedBytes = File.ReadAllBytes(_path);
             var clear = Unprotect(protectedBytes);
-            try { return Encoding.UTF8.GetString(clear); }
+            try
+            {
+                var value = Encoding.UTF8.GetString(clear);
+                return value.StartsWith(StorageMarker, StringComparison.Ordinal)
+                    ? value[StorageMarker.Length..]
+                    : value; // Backward compatibility with the previous storage format.
+            }
             finally { CryptographicOperations.ZeroMemory(clear); }
         }
         catch { return null; }
