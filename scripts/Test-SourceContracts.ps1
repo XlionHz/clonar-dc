@@ -10,10 +10,21 @@ function Require-Text {
     }
 }
 
-Require-Text 'src/ClonarDC.Desktop/ClonarDC.Desktop.csproj' @('<Version>0.8.2</Version>', '<Product>GuildSync</Product>')
-Require-Text 'src/ClonarDC.Server/ClonarDC.Server.csproj' @('<Version>0.8.2</Version>', '<Product>GuildSync API</Product>')
-Require-Text 'src/GuildSync.Bot/GuildSync.Bot.csproj' @('<Version>0.8.2</Version>', '<Product>GuildSync Bot</Product>')
-Require-Text 'installer/ClonarDC.iss' @('MyAppName "GuildSync"', 'MyAppVersion "0.8.2"', 'GuildSync-Setup', 'GuildSync.ico')
+function Forbid-Text {
+    param([string]$Path, [string[]]$Values)
+    $content = Get-Content $Path -Raw
+    foreach ($value in $Values) {
+        if ($content.Contains($value)) {
+            throw "$Path contains forbidden recovery regression: $value"
+        }
+    }
+}
+
+$version = '0.8.3.2'
+Require-Text 'src/ClonarDC.Desktop/ClonarDC.Desktop.csproj' @("<Version>$version</Version>", '<Product>GuildSync</Product>', '<InformationalVersion>0.8.3.2-recovery</InformationalVersion>')
+Require-Text 'src/ClonarDC.Server/ClonarDC.Server.csproj' @("<Version>$version</Version>", '<Product>GuildSync API</Product>')
+Require-Text 'src/GuildSync.Bot/GuildSync.Bot.csproj' @("<Version>$version</Version>", '<Product>GuildSync Bot</Product>')
+Require-Text 'installer/ClonarDC.iss' @('MyAppName "GuildSync"', "MyAppVersion \"$version\"", 'GuildSync-Setup', 'GuildSync.ico')
 Require-Text 'src/ClonarDC.Server/Program.cs' @('/auth/logout', '/auth/logout-all', 'SlidingWindowLimiter', 'RevokeAllSessionsAsync', 'DevicePolicy.RequireIdentity', 'bootstrap-admin-synchronized')
 Require-Text 'src/ClonarDC.Server/DeviceManagement.cs' @('/devices/claim', '/devices/{deviceId}', 'DeviceIdHash', 'ResetDevicesAsync')
 Require-Text 'src/ClonarDC.Server/StatePersistence.cs' @('GUILDSYNC_ALLOW_FILE_STORAGE', 'pg_advisory_xact_lock', 'concurrent database writer')
@@ -21,8 +32,12 @@ Require-Text 'src/ClonarDC.Server/StatePersistence.cs' @('GUILDSYNC_ALLOW_FILE_S
 # UI identity and interaction contracts. Detailed XAML correctness is validated by dotnet build.
 Require-Text 'src/ClonarDC.Desktop/BrandPresentation.cs' @('ShieldGeometry', 'LetterGeometry', 'CreateMark', 'CreateSidebarHeader')
 Require-Text 'src/ClonarDC.Desktop/LoginWindow.xaml' @('LoginIntroStoryboard', 'BrandMarkHost', 'LoginCard', 'Welcome back')
+Require-Text 'src/ClonarDC.Desktop/LoginWindow.xaml.cs' @('AnimateLoginCard(1.025', 'UsedLocalFallback', 'LOCAL PREVIEW MODE')
+Require-Text 'src/ClonarDC.Desktop/RegisterWindow.xaml.cs' @('RegisterWithRecoveryAsync', 'LocalPreviewUrl', 'UsedLocalFallback')
 Require-Text 'src/ClonarDC.Desktop/MainWindow.xaml' @('Text="Token"', 'IsEditable="True"', 'SourceGuildBox', 'TargetGuildBox')
-Require-Text 'src/ClonarDC.Desktop/MainWindow.TokenValidation.cs' @('_discord.SetToken(rawValue)', 'accepted exactly as entered')
+Require-Text 'src/ClonarDC.Desktop/MainWindow.TokenValidation.cs' @('_discord.SetToken(rawValue)', 'ActivatePreviewServers', 'PreviewGuilds')
+Forbid-Text 'src/ClonarDC.Desktop/MainWindow.TokenValidation.cs' @('MessageBox.Show')
+Require-Text 'src/ClonarDC.Desktop/MainWindow.Discord.cs' @('AnalyzeCompatible_Click', 'CloneCompatible_Click', 'Zero requests were sent to Discord')
 Require-Text 'src/ClonarDC.Desktop/MainWindow.ServerInputs.cs' @('MaterializeTypedServer', 'RequireEditableGuild')
 Require-Text 'src/ClonarDC.Desktop/AlphaFixes.cs' @('ContentSource="SelectedContent"', 'Pages.SelectedIndex = 0')
 
@@ -31,7 +46,7 @@ Require-Text 'src/ClonarDC.Desktop/Services/DiscordPreflightService.cs' @('Manag
 Require-Text 'src/ClonarDC.Desktop/Services/BackupService.cs' @('FormatVersion = 2', 'snapshot.json', 'MaximumArchiveBytes', 'LoadLegacyEnvelope')
 Require-Text 'src/ClonarDC.Desktop/Services/OperationReportService.cs' @('FindLatestResumableAsync', 'SaveAsync', 'ExportSummaryAsync')
 Require-Text 'src/GuildSync.Bot/Program.cs' @('WithName("status")', 'AllowedMentions.None', 'Error ID')
-Require-Text '.github/workflows/final-release.yml' @("APP_VERSION: '0.8.2'", 'Test-EngineReliability.ps1')
+Require-Text '.github/workflows/final-release.yml' @("APP_VERSION: '$version'", 'Test-EngineReliability.ps1', 'Launch installed desktop smoke test', 'Minimum installer size')
 
 $trackedText = git ls-files | Where-Object { $_ -notmatch '\.(png|ico|exe|zip|dll|pdb|jpeg|jpg|gif|webp)$' }
 foreach ($file in $trackedText) {
@@ -46,4 +61,4 @@ foreach ($file in $trackedText) {
     }
 }
 
-Write-Host 'GuildSync source contracts and secret scan passed.'
+Write-Host "GuildSync $version recovery source contracts and secret scan passed."
