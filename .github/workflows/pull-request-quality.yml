@@ -18,6 +18,7 @@ jobs:
     timeout-minutes: 55
     env:
       APP_VERSION: '0.8.3.2'
+      API_VERSION: '0.8.3'
 
     steps:
       - name: Checkout
@@ -116,7 +117,7 @@ jobs:
         run: |
           $ErrorActionPreference = 'Stop'
           try {
-            ./scripts/Test-GuildSyncApi.ps1 -BackendPath "$PWD/out/backend/ClonarDC.Server.dll" -ExpectedVersion $env:APP_VERSION *>&1 |
+            ./scripts/Test-GuildSyncApi.ps1 -BackendPath "$PWD/out/backend/ClonarDC.Server.dll" -ExpectedVersion $env:API_VERSION *>&1 |
               Tee-Object -FilePath out/diagnostics/api-smoke.log
           }
           catch {
@@ -129,7 +130,7 @@ jobs:
         run: |
           $ErrorActionPreference = 'Stop'
           try {
-            ./scripts/Test-AdminReconciliation.ps1 -BackendPath "$PWD/out/backend/ClonarDC.Server.dll" -ExpectedVersion $env:APP_VERSION *>&1 |
+            ./scripts/Test-AdminReconciliation.ps1 -BackendPath "$PWD/out/backend/ClonarDC.Server.dll" -ExpectedVersion $env:API_VERSION *>&1 |
               Tee-Object -FilePath out/diagnostics/admin-reconciliation.log
           }
           catch {
