@@ -13,13 +13,16 @@ public partial class MainWindow
         base.OnContentRendered(e);
 
         var version = Assembly.GetExecutingAssembly().GetName().Version ?? new Version(0, 0, 0, 0);
+        var displayVersion = version.Revision > 0
+            ? $"{version.Major}.{version.Minor}.{version.Build}.{version.Revision}"
+            : $"{version.Major}.{version.Minor}.{version.Build}";
         var localDeveloper = string.Equals(
             Environment.GetEnvironmentVariable("GUILDSYNC_API"),
             "http://127.0.0.1:8787",
             StringComparison.OrdinalIgnoreCase);
         VersionText.Text = localDeveloper
-            ? $"v{version.Major}.{version.Minor}.{version.Build} alpha  •  LOCAL DEV"
-            : $"v{version.Major}.{version.Minor}.{version.Build} alpha";
+            ? $"v{displayVersion} recovery  •  LOCAL PREVIEW"
+            : $"v{displayVersion} recovery";
 
         Pages.Template = (ControlTemplate)XamlReader.Parse(
             """
