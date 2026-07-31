@@ -26,7 +26,8 @@ if ($missing.Count -gt 0) {
 
 $mainXaml = Get-Content "$DesktopRoot/MainWindow.xaml" -Raw
 foreach ($automationId in 'TokenInput','SaveToken','LoadServers','Analyze','Start','Resume','Cancel') {
-    if ($mainXaml -notmatch "AutomationProperties.AutomationId=\"$automationId\"") {
+    $automationPattern = [regex]::Escape(('AutomationProperties.AutomationId="{0}"' -f $automationId))
+    if ($mainXaml -notmatch $automationPattern) {
         throw "Required UI automation contract is missing: $automationId"
     }
 }
