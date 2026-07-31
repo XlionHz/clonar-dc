@@ -15,7 +15,9 @@ concurrency:
 jobs:
   build-and-smoke:
     runs-on: windows-latest
-    timeout-minutes: 45
+    timeout-minutes: 55
+    env:
+      APP_VERSION: '0.8.3.2'
 
     steps:
       - name: Checkout
@@ -31,7 +33,7 @@ jobs:
 
       - name: Prepare diagnostics
         shell: pwsh
-        run: New-Item -ItemType Directory -Force -Path out/diagnostics,out/desktop-test | Out-Null
+        run: New-Item -ItemType Directory -Force -Path out/diagnostics,out/desktop-test,out/desktop-launch | Out-Null
 
       - name: Verify source contracts and secrets
         shell: pwsh
@@ -62,12 +64,16 @@ jobs:
             dotnet publish ./src/ClonarDC.Desktop/ClonarDC.Desktop.csproj -c Release --no-restore --self-contained false -p:DebugType=None -p:DebugSymbols=false -o out/desktop-test *>&1 | Tee-Object out/diagnostics/publish-desktop-test.log
             if ($LASTEXITCODE -ne 0) { throw 'Desktop test publish failed.' }
 
+            dotnet publish ./src/ClonarDC.Desktop/ClonarDC.Desktop.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=false -p:DebugType=None -p:DebugSymbols=false -o out/desktop-launch *>&1 | Tee-Object out/diagnostics/publish-desktop-launch.log
+            if ($LASTEXITCODE -ne 0) { throw 'Self-contained desktop publish failed.' }
+
             $assembly = Get-ChildItem out/desktop-test -Filter 'ClonarDC.dll' -File | Select-Object -First 1
-            if ($null -eq $assembly) {
-              Get-ChildItem out/desktop-test | Format-Table Name,Length | Out-String | Tee-Object out/diagnostics/desktop-test-files.log
-              throw 'Deterministic desktop assembly was not generated.'
-            }
+            if ($null -eq $assembly) { throw 'Deterministic desktop assembly was not generated.' }
             $assembly.FullName | Set-Content out/desktop-assembly-path.txt
+
+            $payloadBytes = (Get-ChildItem out/desktop-launch -Recurse -File | Measure-Object Length -Sum).Sum
+            if ($payloadBytes -lt 90000000) { throw "Self-contained desktop payload is suspiciously small: $payloadBytes bytes." }
+            "SELF_CONTAINED_BYTES=$payloadBytes" | Set-Content out/diagnostics/payload-size.log
           }
           catch {
             $_ | Format-List * -Force | Out-String | Tee-Object out/diagnostics/build-exception.log
@@ -88,6 +94,16 @@ jobs:
             throw
           }
 
+      - name: Launch self-contained desktop smoke test
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $process = Start-Process -FilePath "$PWD/out/desktop-launch/ClonarDC.exe" -PassThru
+          Start-Sleep -Seconds 10
+          if ($process.HasExited) { throw "GuildSync exited early with code $($process.ExitCode)." }
+          Stop-Process -Id $process.Id -Force
+          'Self-contained GuildSync remained open for 10 seconds.' | Set-Content out/diagnostics/desktop-launch.log
+
       - name: Publish API for smoke tests
         shell: pwsh
         run: |
@@ -100,7 +116,7 @@ jobs:
         run: |
           $ErrorActionPreference = 'Stop'
           try {
-            ./scripts/Test-GuildSyncApi.ps1 -BackendPath "$PWD/out/backend/ClonarDC.Server.dll" -ExpectedVersion '0.8.2' *>&1 |
+            ./scripts/Test-GuildSyncApi.ps1 -BackendPath "$PWD/out/backend/ClonarDC.Server.dll" -ExpectedVersion $env:APP_VERSION *>&1 |
               Tee-Object -FilePath out/diagnostics/api-smoke.log
           }
           catch {
@@ -113,7 +129,7 @@ jobs:
         run: |
           $ErrorActionPreference = 'Stop'
           try {
-            ./scripts/Test-AdminReconciliation.ps1 -BackendPath "$PWD/out/backend/ClonarDC.Server.dll" -ExpectedVersion '0.8.2' *>&1 |
+            ./scripts/Test-AdminReconciliation.ps1 -BackendPath "$PWD/out/backend/ClonarDC.Server.dll" -ExpectedVersion $env:APP_VERSION *>&1 |
               Tee-Object -FilePath out/diagnostics/admin-reconciliation.log
           }
           catch {
@@ -129,6 +145,8 @@ jobs:
           path: |
             out/desktop-test/*.deps.json
             out/desktop-test/*.runtimeconfig.json
+            out/desktop-launch/*.deps.json
+            out/desktop-launch/*.runtimeconfig.json
             out/backend/*.deps.json
             out/backend/*.runtimeconfig.json
             out/diagnostics/**
