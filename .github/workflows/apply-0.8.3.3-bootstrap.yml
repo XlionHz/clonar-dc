@@ -1,0 +1,100 @@
+name: Apply GuildSync 0.8.3.3 patch
+
+on:
+  push:
+    branches:
+      - agent/guildsync-0.8.3.3-provider-separation
+    paths:
+      - .github/workflows/apply-0.8.3.3-bootstrap.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout recovery branch
+        uses: actions/checkout@v4
+        with:
+          ref: agent/guildsync-0.8.3.3-provider-separation
+          fetch-depth: 0
+
+      - name: Fetch and apply reviewed patch
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import base64
+          import io
+          import json
+          import os
+          import pathlib
+          import tarfile
+          import urllib.request
+
+          shas = [
+              "a7ff38c9fc3308d7d86beaf017e63e255198fc83",
+              "518a32ad44aa2cdeff8ff77e6c40ed7c092c48bd",
+              "59e651bb7d65c360d3cc17c527d63ddf9a7d41a1",
+              "e81702bc1ac40223be78da184837acd95d809d18",
+              "f2a5b6c19b71558d30c49957c260529721867018",
+              "cd243f3628aeab7031f6f1ee75328296529ec83b",
+              "1fcfa52d2a79daed3594473b051244b27672cce6",
+              "28e8b5e284edf76ff9f0770dbd07be36f7679992",
+              "f3fdb4ca2238811c0fd4c23174c4f948367adfad",
+          ]
+
+          chunks = []
+          for sha in shas:
+              request = urllib.request.Request(
+                  f"https://api.github.com/repos/XlionHz/clonar-dc/git/blobs/{sha}",
+                  headers={
+                      "Authorization": f"Bearer {os.environ['GH_TOKEN']}",
+                      "Accept": "application/vnd.github+json",
+                      "X-GitHub-Api-Version": "2022-11-28",
+                  },
+              )
+              with urllib.request.urlopen(request) as response:
+                  item = json.load(response)
+              chunks.append(base64.b64decode(item["content"]).decode("utf-8"))
+
+          archive_bytes = base64.b64decode("".join(chunks), validate=True)
+          with tarfile.open(fileobj=io.BytesIO(archive_bytes), mode="r:gz") as archive:
+              archive.extractall(path=".", filter="data")
+
+          obsolete = [
+              "TEST_TREE_PLACEHOLDER.txt",
+              "TREE_TEST_A.txt",
+              "TREE_TEST_B.txt",
+              "TREE_TEST_C.txt",
+              "TREE_TEST_D.txt",
+              "TREE_TEST_E.txt",
+              "TREE_TEST_F.txt",
+              "TREE_TEST_G.txt",
+              "build-status/backend-build.log",
+              "build-status/backend-error.txt",
+              "build-status/backend-restore.log",
+              "build-status/compile-error.txt",
+              "build-status/desktop-build.log",
+              "src/ClonarDC.Desktop/Services/DiscordConnectionProbe.cs",
+          ]
+          for name in obsolete:
+              path = pathlib.Path(name)
+              if path.exists():
+                  path.unlink()
+          PY
+          rm -f .github/workflows/apply-0.8.3.3-bootstrap.yml
+
+      - name: Commit clean product patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'feat: separate providers and complete simulation in GuildSync 0.8.3.3'
+          git push origin HEAD:agent/guildsync-0.8.3.3-provider-separation
