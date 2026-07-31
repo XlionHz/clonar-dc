@@ -21,10 +21,11 @@ function Forbid-Text {
 }
 
 $version = '0.8.3.2'
+$installerVersionContract = 'MyAppVersion "' + $version + '"'
 Require-Text 'src/ClonarDC.Desktop/ClonarDC.Desktop.csproj' @("<Version>$version</Version>", '<Product>GuildSync</Product>', '<InformationalVersion>0.8.3.2-recovery</InformationalVersion>')
 Require-Text 'src/ClonarDC.Server/ClonarDC.Server.csproj' @("<Version>$version</Version>", '<Product>GuildSync API</Product>')
 Require-Text 'src/GuildSync.Bot/GuildSync.Bot.csproj' @("<Version>$version</Version>", '<Product>GuildSync Bot</Product>')
-Require-Text 'installer/ClonarDC.iss' @('MyAppName "GuildSync"', "MyAppVersion \"$version\"", 'GuildSync-Setup', 'GuildSync.ico')
+Require-Text 'installer/ClonarDC.iss' @('MyAppName "GuildSync"', $installerVersionContract, 'GuildSync-Setup', 'GuildSync.ico')
 Require-Text 'src/ClonarDC.Server/Program.cs' @('/auth/logout', '/auth/logout-all', 'SlidingWindowLimiter', 'RevokeAllSessionsAsync', 'DevicePolicy.RequireIdentity', 'bootstrap-admin-synchronized')
 Require-Text 'src/ClonarDC.Server/DeviceManagement.cs' @('/devices/claim', '/devices/{deviceId}', 'DeviceIdHash', 'ResetDevicesAsync')
 Require-Text 'src/ClonarDC.Server/StatePersistence.cs' @('GUILDSYNC_ALLOW_FILE_STORAGE', 'pg_advisory_xact_lock', 'concurrent database writer')
